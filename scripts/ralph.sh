@@ -42,7 +42,13 @@ if [ -f "$PRD_FILE" ] && [ -f "$LAST_BRANCH_FILE" ]; then
       echo "   Could not archive prd.json from branch: $LAST_BRANCH"
     fi
 
-    [ -f "$PROGRESS_FILE" ] && cp "$PROGRESS_FILE" "$ARCHIVE_FOLDER/"
+    if git -C "$PROJECT_DIR" show "$LAST_BRANCH:progress.txt" > "$ARCHIVE_FOLDER/progress.txt" 2>/dev/null; then
+      :
+    else
+      rm -f "$ARCHIVE_FOLDER/progress.txt"
+      echo "   Could not archive progress.txt from branch: $LAST_BRANCH"
+    fi
+
     echo "   Archived to: $ARCHIVE_FOLDER"
 
     echo "# Ralph Progress Log" > "$PROGRESS_FILE"
