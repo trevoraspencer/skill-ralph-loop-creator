@@ -112,7 +112,7 @@ Generate a `prd.json` file in the project root:
 ### Step 4: Generate and Run the Loop
 
 1. Create `.ralph/` directory in the project root if it doesn't exist
-2. Check `.gitignore` — add `.ralph/` if not already present (create `.gitignore` if it doesn't exist)
+2. Check `.gitignore` — add `.ralph/`, `.ralph-archive/`, and `.ralph-last-branch` if missing (create `.gitignore` if it doesn't exist)
 3. Read `scripts/ralph.sh` (the reference template in this skill) to understand the loop structure
 4. Generate `.ralph/<loop-name>.sh` using the reference template's structure, with the selected agent command baked in:
    - Use the exact command template from Step 2a, substituting the user's model from Step 2b
@@ -207,7 +207,7 @@ Each story MUST be completable in ONE iteration. If you can't describe it in 2-3
 }
 ```
 
-**Step 4:** Generate `.ralph/add-task-priorities.sh` (with `claude -p "$(cat "$PROMPT_FILE")" --dangerously-skip-permissions --model sonnet` as the agent command), copy prompt to `.ralph/add-task-priorities-prompt.md`, add `.ralph/` to `.gitignore`.
+**Step 4:** Generate `.ralph/add-task-priorities.sh` (with `claude -p "$(cat "$PROMPT_FILE")" --dangerously-skip-permissions --model sonnet` as the agent command), copy prompt to `.ralph/add-task-priorities-prompt.md`, and add `.ralph/`, `.ralph-archive/`, and `.ralph-last-branch` to `.gitignore`.
 
 > prd.json created with 2 user stories. Run `.ralph/add-task-priorities.sh` to start autonomous execution.
 

@@ -53,13 +53,13 @@ Ralph will walk you through configuration (agent, model, loop name), generate th
 
 Ralph generates loop scripts into a `.ralph/` directory in your project root. This directory:
 
-- Is automatically added to `.gitignore`
+- Is automatically added to `.gitignore` (along with `.ralph-archive/` and `.ralph-last-branch` runtime state files)
 - Supports multiple named loops (e.g., `feature-a.sh`, `feature-b.sh`)
 - Each loop is self-contained: a shell script and its co-located prompt file
 
 ```
 project/
-  .gitignore            # .ralph/ added automatically
+  .gitignore            # .ralph/, .ralph-archive/, .ralph-last-branch added automatically
   .ralph/
     feature-a.sh        # Loop script (e.g., Claude Code + sonnet)
     feature-a-prompt.md

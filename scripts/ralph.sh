@@ -12,12 +12,12 @@
 set -e
 
 MAX_ITERATIONS=${1:-10}
-PROJECT_DIR="$(pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PRD_FILE="$PROJECT_DIR/prd.json"
 PROGRESS_FILE="$PROJECT_DIR/progress.txt"
 ARCHIVE_DIR="$PROJECT_DIR/.ralph-archive"
 LAST_BRANCH_FILE="$PROJECT_DIR/.ralph-last-branch"
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # In generated scripts, this points to the co-located prompt file:
 # PROMPT_FILE="$SCRIPT_DIR/<loop-name>-prompt.md"
 PROMPT_FILE="$SCRIPT_DIR/prompt.md"
@@ -34,7 +34,14 @@ if [ -f "$PRD_FILE" ] && [ -f "$LAST_BRANCH_FILE" ]; then
 
     echo "Archiving previous run: $LAST_BRANCH"
     mkdir -p "$ARCHIVE_FOLDER"
-    [ -f "$PRD_FILE" ] && cp "$PRD_FILE" "$ARCHIVE_FOLDER/"
+
+    if git -C "$PROJECT_DIR" show "$LAST_BRANCH:prd.json" > "$ARCHIVE_FOLDER/prd.json" 2>/dev/null; then
+      :
+    else
+      rm -f "$ARCHIVE_FOLDER/prd.json"
+      echo "   Could not archive prd.json from branch: $LAST_BRANCH"
+    fi
+
     [ -f "$PROGRESS_FILE" ] && cp "$PROGRESS_FILE" "$ARCHIVE_FOLDER/"
     echo "   Archived to: $ARCHIVE_FOLDER"
 
