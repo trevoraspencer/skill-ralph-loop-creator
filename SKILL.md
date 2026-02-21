@@ -118,22 +118,30 @@ Generate a `prd.json` file in the project root:
    - Use the exact command template from Step 2a, substituting the user's model from Step 2b
    - If no model was specified, omit the model flag from the command
    - Set `PROMPT_FILE="$SCRIPT_DIR/<loop-name>-prompt.md"` (co-located with the script)
-   - Keep all existing logic: archive, branch tracking, progress init, completion detection, 2s sleep between iterations
+   - Keep all existing logic: archive, branch tracking, progress init, completion detection, 2s sleep between iterations, finalize (push + PR creation)
 5. Copy `scripts/prompt.md` (from this skill) → `.ralph/<loop-name>-prompt.md`
 6. Make the script executable: `chmod +x .ralph/<loop-name>.sh`
 7. Tell the user: `Run with: .ralph/<loop-name>.sh [max_iterations]`
 
 ## Critical Rules for User Stories
 
-### Size: One Context Window
+### Size: Small but Substantive
 
-Each story MUST be completable in ONE iteration. If you can't describe it in 2-3 sentences, it's too big.
+Each story MUST be completable in ONE iteration. If you can't describe it in 2-3 sentences, it's too big. But each story must also involve meaningful work — if it's a single find-and-replace or a one-line edit, it's too small and should be combined with related work.
+
+**Too small (combine with related work):**
+- "Replace nvidia-smi with rocm-smi in one file" → combine into a broader documentation accuracy story
+- "Add one missing env var to README" → combine with other doc gaps
+- "Fix a typo in a config file" → combine with other config improvements
+- Any story that a developer could complete in under 5 minutes
 
 **Right-sized:**
 - Add a database column and migration
 - Add a UI component to an existing page
 - Update a server action with new logic
 - Add a filter dropdown to a list
+- Fix a validation bug, add tests for the fix, and update docs
+- Consolidate duplicated helper functions across multiple files
 
 **Too big (split these):**
 - "Build the entire dashboard" → schema, queries, UI components, filters
@@ -218,12 +226,19 @@ Each iteration, a fresh headless agent:
 2. Picks highest priority story where `passes: false`
 3. Implements it
 4. Runs quality checks (typecheck, lint, test)
-5. Commits if passing
-6. Updates `prd.json` to mark `passes: true`
+5. Commits if passing (or commits progress notes if stuck — see "If You Get Stuck" in prompt)
+6. Updates `prd.json` to mark `passes: true` (or updates `notes` if blocked)
 7. Appends learnings to `progress.txt`
 8. Exits
 
 Loop continues until all stories pass or max iterations hit.
+
+After the loop ends (either all stories complete or max iterations reached):
+1. The loop script pushes the branch to origin
+2. Creates a PR via `gh pr create` from the ralph branch to the default branch
+3. If `gh` CLI is not available, prints manual PR instructions
+
+This ensures all work is durable on the remote and ready for review, even if the local environment is deleted.
 
 ## Files Reference
 

@@ -78,6 +78,16 @@ Only update agent instruction files if you have **genuinely reusable knowledge**
 - Keep changes focused and minimal
 - Follow existing code patterns
 
+## If You Get Stuck
+
+If you cannot complete a story — whether due to failing checks, confusion about requirements, missing dependencies, or any other blocker — do NOT leave the working tree dirty. Follow this graceful exit procedure:
+
+1. **Revert any broken implementation changes** that would leave the codebase in a bad state
+2. **Update the story's `notes` field** in `prd.json` with a clear description of what you tried, what went wrong, and any clues for the next iteration. Keep `passes` set to `false`.
+3. **Append to `progress.txt`** with what you attempted and why it failed, using the standard progress format. The learnings section is especially important here — the next iteration needs to understand what didn't work.
+4. **Commit** `prd.json` and `progress.txt` with message: `wip: [Story ID] - blocked, see notes`
+5. **End your response** — the next iteration will pick up the same story with your notes as context.
+
 ## Browser Testing (Required for Frontend Stories)
 
 For any story that changes UI, you MUST verify it works in the browser:
