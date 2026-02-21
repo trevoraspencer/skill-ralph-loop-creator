@@ -21,7 +21,7 @@ Ask clarifying questions if needed:
 
 ### Step 2: Configure the Loop
 
-Ask the user three questions to configure the loop:
+Ask the user four questions to configure the loop:
 
 #### 2a. Which AI agent?
 
@@ -82,6 +82,20 @@ If the user says "default" or leaves it blank, omit the model flag entirely (use
 
 Suggest a name based on the feature in kebab-case (e.g., `add-task-priorities`). The user can accept or provide a different name. This becomes the filename: `.ralph/<loop-name>.sh`
 
+#### 2d. Auto-push and create PR?
+
+Ask the user: **"Should Ralph automatically push the branch and create a PR when the loop finishes?"**
+
+- **Yes** — When the loop ends (all stories complete or max iterations reached), the script will push the branch to `origin` and create a pull request via `gh pr create`. The base branch (e.g., `main` or `master`) is auto-detected at generation time by checking which branch exists on the remote.
+- **No** — The script only runs locally. All commits stay local. The user pushes and creates PRs themselves.
+
+If the user says yes, detect the base branch now (at generation time) by checking:
+1. Does `refs/remotes/origin/main` exist? → use `main`
+2. Does `refs/remotes/origin/master` exist? → use `master`
+3. Neither → default to `main`
+
+Bake the resolved base branch directly into the generated script as `DEFAULT_BRANCH="main"` (or `"master"`).
+
 ### Step 3: Create prd.json
 
 Generate a `prd.json` file in the project root:
@@ -118,7 +132,8 @@ Generate a `prd.json` file in the project root:
    - Use the exact command template from Step 2a, substituting the user's model from Step 2b
    - If no model was specified, omit the model flag from the command
    - Set `PROMPT_FILE="$SCRIPT_DIR/<loop-name>-prompt.md"` (co-located with the script)
-   - Keep all existing logic: archive, branch tracking, progress init, completion detection, 2s sleep between iterations, finalize (push + PR creation)
+   - Keep all existing logic: archive, branch tracking, progress init, completion detection, 2s sleep between iterations
+   - If the user opted for auto-push+PR in Step 2d: include the `finalize()` function with `DEFAULT_BRANCH` set to the resolved base branch, and `AUTO_PUSH_PR="true"`. Otherwise set `AUTO_PUSH_PR="false"` and omit the `finalize()` function.
 5. Copy `scripts/prompt.md` (from this skill) → `.ralph/<loop-name>-prompt.md`
 6. Make the script executable: `chmod +x .ralph/<loop-name>.sh`
 7. Tell the user: `Run with: .ralph/<loop-name>.sh [max_iterations]`
@@ -175,7 +190,7 @@ Each story MUST be completable in ONE iteration. If you can't describe it in 2-3
 
 **Step 1:** Read the feature description, ask clarifying questions.
 
-**Step 2:** Ask: Which agent? → `claude`. Which model? → `sonnet`. Loop name? → `add-task-priorities`.
+**Step 2:** Ask: Which agent? → `claude`. Which model? → `sonnet`. Loop name? → `add-task-priorities`. Auto-push+PR? → `yes`.
 
 **Step 3:** Create prd.json:
 ```json
@@ -215,7 +230,7 @@ Each story MUST be completable in ONE iteration. If you can't describe it in 2-3
 }
 ```
 
-**Step 4:** Generate `.ralph/add-task-priorities.sh` (with `claude -p "$(cat "$PROMPT_FILE")" --dangerously-skip-permissions --model sonnet` as the agent command), copy prompt to `.ralph/add-task-priorities-prompt.md`, and add `.ralph/`, `.ralph-archive/`, and `.ralph-last-branch` to `.gitignore`.
+**Step 4:** Generate `.ralph/add-task-priorities.sh` (with `claude -p "$(cat "$PROMPT_FILE")" --dangerously-skip-permissions --model sonnet` as the agent command, `AUTO_PUSH_PR="true"` and `DEFAULT_BRANCH="main"` since the user opted for auto-push+PR), copy prompt to `.ralph/add-task-priorities-prompt.md`, and add `.ralph/`, `.ralph-archive/`, and `.ralph-last-branch` to `.gitignore`.
 
 > prd.json created with 2 user stories. Run `.ralph/add-task-priorities.sh` to start autonomous execution.
 
@@ -233,12 +248,13 @@ Each iteration, a fresh headless agent:
 
 Loop continues until all stories pass or max iterations hit.
 
-After the loop ends (either all stories complete or max iterations reached):
+If the user opted for auto-push+PR (Step 2d), then after the loop ends (all stories complete or max iterations reached):
 1. The loop script pushes the branch to origin
 2. Creates a PR via `gh pr create` from the ralph branch to the default branch
-3. If `gh` CLI is not available, prints manual PR instructions
+3. If `gh` CLI is not available or PR creation fails, prints manual instructions instead of aborting
+4. Push or PR failures are handled gracefully — they never mask a successful loop run
 
-This ensures all work is durable on the remote and ready for review, even if the local environment is deleted.
+If the user chose local-only, the script simply exits after the loop. All commits remain local.
 
 ## Files Reference
 

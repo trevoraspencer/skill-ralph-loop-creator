@@ -7,6 +7,14 @@
 # and generates a concrete script in .ralph/<loop-name>.sh with the selected
 # agent command baked in.
 #
+# The finalize() function (push + PR creation) is CONDITIONAL. Only include it
+# in generated scripts if the user opted for auto-push+PR in Step 2d. If they
+# chose local-only, omit finalize() entirely and remove the finalize calls.
+#
+# When including finalize(), replace DEFAULT_BRANCH with the actual base branch
+# detected at generation time (e.g., "main" or "master"). Do NOT rely on
+# runtime detection — bake the value in.
+#
 # Usage: .ralph/<loop-name>.sh [max_iterations]
 
 set -e
@@ -72,13 +80,19 @@ if [ ! -f "$PROGRESS_FILE" ]; then
   echo "---" >> "$PROGRESS_FILE"
 fi
 
-# Resolve the default branch (the base for the PR)
-DEFAULT_BRANCH=$(git -C "$PROJECT_DIR" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
-if [ -z "$DEFAULT_BRANCH" ]; then
-  DEFAULT_BRANCH=$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
-fi
+# === AUTO-PUSH+PR CONFIGURATION (set during generation) ===
+# Set to "true" if the user opted for auto-push+PR in Step 2d, "false" otherwise.
+# When generating a concrete script: if the user said yes, set to "true" and
+# replace DEFAULT_BRANCH with the detected base branch. If no, set to "false".
+AUTO_PUSH_PR="false"
+# Baked in at generation time. Only used when AUTO_PUSH_PR="true".
+# Detected by checking: does refs/remotes/origin/main exist? Use "main".
+# Else does refs/remotes/origin/master exist? Use "master". Else default "main".
+DEFAULT_BRANCH="main"
 
-# Push branch and create PR after the loop ends (success or max iterations)
+# Push branch and create PR after the loop ends (success or max iterations).
+# Only called when AUTO_PUSH_PR="true". Errors here are handled gracefully —
+# a push or PR failure never masks a successful loop run.
 finalize() {
   local status="$1"
   local branch
@@ -102,11 +116,16 @@ finalize() {
   echo "  Pushing branch and creating PR"
   echo "═══════════════════════════════════════════════════════"
 
-  git -C "$PROJECT_DIR" push -u origin "$branch"
+  if ! git -C "$PROJECT_DIR" push -u origin "$branch"; then
+    echo ""
+    echo "Warning: git push failed. Push manually with:"
+    echo "  git push -u origin $branch"
+    return
+  fi
 
   if ! command -v gh >/dev/null 2>&1; then
     echo "gh CLI not found. Push complete, but create PR manually:"
-    echo "  gh pr create --head $branch --base $DEFAULT_BRANCH"
+    echo "  gh pr create --head '$branch' --base '$DEFAULT_BRANCH'"
     return
   fi
 
@@ -131,12 +150,17 @@ See \`progress.txt\` for iteration-by-iteration details."
 Check \`prd.json\` for story status and \`progress.txt\` for details on what was accomplished and any blockers."
   fi
 
-  gh pr create \
+  if ! gh pr create \
     --head "$branch" \
     --base "$DEFAULT_BRANCH" \
     --title "$pr_title" \
     --body "$pr_body" \
-    --repo "$(git -C "$PROJECT_DIR" remote get-url origin)"
+    --repo "$(git -C "$PROJECT_DIR" remote get-url origin)"; then
+    echo ""
+    echo "Warning: PR creation failed. Push succeeded. Create PR manually:"
+    echo "  gh pr create --head '$branch' --base '$DEFAULT_BRANCH'"
+    return
+  fi
 
   echo "PR created."
 }
@@ -163,7 +187,9 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     echo ""
     echo "Ralph completed all tasks!"
     echo "Completed at iteration $i of $MAX_ITERATIONS"
-    finalize "complete"
+    if [ "$AUTO_PUSH_PR" = "true" ]; then
+      finalize "complete"
+    fi
     exit 0
   fi
 
@@ -174,5 +200,7 @@ done
 echo ""
 echo "Ralph reached max iterations ($MAX_ITERATIONS) without completing all tasks."
 echo "Check $PROGRESS_FILE for status."
-finalize "partial"
+if [ "$AUTO_PUSH_PR" = "true" ]; then
+  finalize "partial"
+fi
 exit 1
