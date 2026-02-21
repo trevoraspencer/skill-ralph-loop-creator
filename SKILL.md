@@ -132,6 +132,7 @@ Generate a `prd.json` file in the project root:
    - Use the exact command template from Step 2a, substituting the user's model from Step 2b
    - If no model was specified, omit the model flag from the command
    - Set `PROMPT_FILE="$SCRIPT_DIR/<loop-name>-prompt.md"` (co-located with the script)
+   - Set `AGENT_BIN` to the selected executable (for `custom`, use the command's executable token)
    - Keep all existing logic: archive, branch tracking, progress init, completion detection, 2s sleep between iterations
    - If the user opted for auto-push+PR in Step 2d: include the `finalize()` function with `DEFAULT_BRANCH` set to the resolved base branch, and `AUTO_PUSH_PR="true"`. Otherwise set `AUTO_PUSH_PR="false"` and omit the `finalize()` function.
 5. Copy `scripts/prompt.md` (from this skill) → `.ralph/<loop-name>-prompt.md`

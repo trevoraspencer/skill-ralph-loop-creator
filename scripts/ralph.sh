@@ -15,6 +15,7 @@
 # Usage: .ralph/<loop-name>.sh [max_iterations]
 
 set -e
+set -o pipefail
 
 MAX_ITERATIONS=${1:-10}
 if ! [[ "$MAX_ITERATIONS" =~ ^[0-9]+$ ]] || [ "$MAX_ITERATIONS" -eq 0 ]; then
@@ -37,7 +38,35 @@ ARCHIVE_DIR="$PROJECT_DIR/.ralph-archive"
 LAST_BRANCH_FILE="$PROJECT_DIR/.ralph-last-branch"
 # In generated scripts, this points to the co-located prompt file:
 # PROMPT_FILE="$SCRIPT_DIR/<loop-name>-prompt.md"
+# shellcheck disable=SC2034
 PROMPT_FILE="$SCRIPT_DIR/prompt.md"
+# In generated scripts, this is set to the selected executable (e.g. claude).
+AGENT_BIN="AGENT_BIN_HERE"
+
+if [ ! -f "$PRD_FILE" ]; then
+  echo "Error: missing $PRD_FILE. Generate prd.json before running this loop."
+  exit 1
+fi
+
+if ! jq -e '
+  type == "object" and
+  (.branchName | type == "string" and length > 0) and
+  (.userStories | type == "array")
+' "$PRD_FILE" >/dev/null 2>&1; then
+  echo "Error: $PRD_FILE is invalid. It must include non-empty string branchName and array userStories."
+  exit 1
+fi
+
+if [[ "$AGENT_BIN" == AGENT_BIN_* ]]; then
+  echo "Error: AGENT_BIN placeholder was not replaced in this generated script."
+  echo "Regenerate the loop script so AGENT_BIN points to your chosen CLI."
+  exit 1
+fi
+
+if ! command -v "$AGENT_BIN" >/dev/null 2>&1; then
+  echo "Error: agent binary '$AGENT_BIN' is not installed or not on PATH."
+  exit 1
+fi
 
 # Archive previous run if branch changed
 if [ -f "$PRD_FILE" ] && [ -f "$LAST_BRANCH_FILE" ]; then
@@ -46,7 +75,7 @@ if [ -f "$PRD_FILE" ] && [ -f "$LAST_BRANCH_FILE" ]; then
 
   if [ -n "$CURRENT_BRANCH" ] && [ -n "$LAST_BRANCH" ] && [ "$CURRENT_BRANCH" != "$LAST_BRANCH" ]; then
     DATE=$(date +%Y-%m-%d)
-    FOLDER_NAME=$(echo "$LAST_BRANCH" | sed 's|^ralph/||')
+    FOLDER_NAME=${LAST_BRANCH#ralph/}
     ARCHIVE_FOLDER="$ARCHIVE_DIR/$DATE-$FOLDER_NAME"
 
     echo "Archiving previous run: $LAST_BRANCH"
@@ -143,7 +172,7 @@ finalize() {
 
   # Check if a PR already exists for this branch
   local existing_pr
-  existing_pr=$(gh pr view "$branch" --repo "$(git -C "$PROJECT_DIR" remote get-url origin)" --json number --jq '.number' 2>/dev/null || echo "")
+  existing_pr=$(cd "$PROJECT_DIR" && gh pr view "$branch" --json number --jq '.number' 2>/dev/null || echo "")
   if [ -n "$existing_pr" ]; then
     echo "PR #$existing_pr already exists for branch $branch"
     return
@@ -162,12 +191,13 @@ See \`progress.txt\` for iteration-by-iteration details."
 Check \`prd.json\` for story status and \`progress.txt\` for details on what was accomplished and any blockers."
   fi
 
-  if ! gh pr create \
-    --head "$branch" \
-    --base "$DEFAULT_BRANCH" \
-    --title "$pr_title" \
-    --body "$pr_body" \
-    --repo "$(git -C "$PROJECT_DIR" remote get-url origin)"; then
+  if ! (
+    cd "$PROJECT_DIR" && gh pr create \
+      --head "$branch" \
+      --base "$DEFAULT_BRANCH" \
+      --title "$pr_title" \
+      --body "$pr_body"
+  ); then
     echo ""
     echo "Warning: PR creation failed. Push succeeded. Create PR manually:"
     echo "  gh pr create --head '$branch' --base '$DEFAULT_BRANCH'"
@@ -194,7 +224,17 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
   # Gemini CLI:     gemini -p "$(cat "$PROMPT_FILE")" --yolo -m MODEL
   # GitHub Copilot: copilot -p "$(cat "$PROMPT_FILE")" --yolo --model MODEL
   # CC-Mirror:      $BINARY -p "$(cat "$PROMPT_FILE")" --dangerously-skip-permissions --model MODEL
-  OUTPUT=$(AGENT_COMMAND_HERE 2>&1 | tee /dev/stderr) || true
+  set +e
+  OUTPUT=$(AGENT_COMMAND_HERE 2>&1 | tee /dev/stderr)
+  AGENT_EXIT=$?
+  set -e
+
+  if [ "$AGENT_EXIT" -ne 0 ]; then
+    echo ""
+    echo "Error: agent command failed with exit code $AGENT_EXIT."
+    echo "Fix agent CLI/auth/config and rerun this loop."
+    exit "$AGENT_EXIT"
+  fi
 
   if echo "$OUTPUT" | grep -q "<promise>COMPLETE</promise>"; then
     echo ""
