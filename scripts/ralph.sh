@@ -7,11 +7,28 @@
 # and generates a concrete script in .ralph/<loop-name>.sh with the selected
 # agent command baked in.
 #
+# The section between "BEGIN: AUTO-PUSH+PR" and "END: AUTO-PUSH+PR" markers is
+# CONDITIONAL. Only include it if the user opted for auto-push+PR in Step 2d.
+# If they chose local-only, delete that entire section and the finalize() call
+# sites in the loop. See the markers and comments in the section for details.
+#
 # Usage: .ralph/<loop-name>.sh [max_iterations]
 
 set -e
 
 MAX_ITERATIONS=${1:-10}
+if ! [[ "$MAX_ITERATIONS" =~ ^[0-9]+$ ]] || [ "$MAX_ITERATIONS" -eq 0 ]; then
+  echo "Error: max_iterations must be a positive integer (got: '$MAX_ITERATIONS')"
+  exit 1
+fi
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "Error: jq is required but not installed. Install it with:"
+  echo "  brew install jq    # macOS"
+  echo "  apt install jq     # Debian/Ubuntu"
+  exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PRD_FILE="$PROJECT_DIR/prd.json"
@@ -72,13 +89,22 @@ if [ ! -f "$PROGRESS_FILE" ]; then
   echo "---" >> "$PROGRESS_FILE"
 fi
 
-# Resolve the default branch (the base for the PR)
-DEFAULT_BRANCH=$(git -C "$PROJECT_DIR" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's|refs/remotes/origin/||')
-if [ -z "$DEFAULT_BRANCH" ]; then
-  DEFAULT_BRANCH=$(git -C "$PROJECT_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
-fi
+# === BEGIN: AUTO-PUSH+PR (include this section only if user opted in at Step 2d) ===
+# When generating a concrete script:
+#   - If the user said YES to auto-push+PR: include this entire section and set
+#     DEFAULT_BRANCH to the detected base branch (main/master).
+#   - If the user said NO: delete this entire section (from BEGIN to END marker)
+#     and also remove the two `if [ "$AUTO_PUSH_PR" = "true" ]` blocks in the
+#     loop below.
+AUTO_PUSH_PR="false"
+# Baked in at generation time by checking:
+#   1. Does refs/remotes/origin/main exist? → "main"
+#   2. Does refs/remotes/origin/master exist? → "master"
+#   3. Neither → default to "main"
+DEFAULT_BRANCH="main"
 
-# Push branch and create PR after the loop ends (success or max iterations)
+# Push branch and create PR after the loop ends. Errors are handled gracefully —
+# a push or PR failure never masks a successful loop run.
 finalize() {
   local status="$1"
   local branch
@@ -102,11 +128,16 @@ finalize() {
   echo "  Pushing branch and creating PR"
   echo "═══════════════════════════════════════════════════════"
 
-  git -C "$PROJECT_DIR" push -u origin "$branch"
+  if ! git -C "$PROJECT_DIR" push -u origin "$branch"; then
+    echo ""
+    echo "Warning: git push failed. Push manually with:"
+    echo "  git push -u origin $branch"
+    return
+  fi
 
   if ! command -v gh >/dev/null 2>&1; then
     echo "gh CLI not found. Push complete, but create PR manually:"
-    echo "  gh pr create --head $branch --base $DEFAULT_BRANCH"
+    echo "  gh pr create --head '$branch' --base '$DEFAULT_BRANCH'"
     return
   fi
 
@@ -131,19 +162,25 @@ See \`progress.txt\` for iteration-by-iteration details."
 Check \`prd.json\` for story status and \`progress.txt\` for details on what was accomplished and any blockers."
   fi
 
-  gh pr create \
+  if ! gh pr create \
     --head "$branch" \
     --base "$DEFAULT_BRANCH" \
     --title "$pr_title" \
     --body "$pr_body" \
-    --repo "$(git -C "$PROJECT_DIR" remote get-url origin)"
+    --repo "$(git -C "$PROJECT_DIR" remote get-url origin)"; then
+    echo ""
+    echo "Warning: PR creation failed. Push succeeded. Create PR manually:"
+    echo "  gh pr create --head '$branch' --base '$DEFAULT_BRANCH'"
+    return
+  fi
 
   echo "PR created."
 }
+# === END: AUTO-PUSH+PR ===
 
 echo "Starting Ralph - Max iterations: $MAX_ITERATIONS"
 
-for i in $(seq 1 $MAX_ITERATIONS); do
+for i in $(seq 1 "$MAX_ITERATIONS"); do
   echo ""
   echo "═══════════════════════════════════════════════════════"
   echo "  Ralph Iteration $i of $MAX_ITERATIONS"
@@ -163,7 +200,9 @@ for i in $(seq 1 $MAX_ITERATIONS); do
     echo ""
     echo "Ralph completed all tasks!"
     echo "Completed at iteration $i of $MAX_ITERATIONS"
-    finalize "complete"
+    if [ "$AUTO_PUSH_PR" = "true" ]; then
+      finalize "complete"
+    fi
     exit 0
   fi
 
@@ -174,5 +213,7 @@ done
 echo ""
 echo "Ralph reached max iterations ($MAX_ITERATIONS) without completing all tasks."
 echo "Check $PROGRESS_FILE for status."
-finalize "partial"
+if [ "$AUTO_PUSH_PR" = "true" ]; then
+  finalize "partial"
+fi
 exit 1
