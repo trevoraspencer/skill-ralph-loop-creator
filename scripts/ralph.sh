@@ -7,19 +7,28 @@
 # and generates a concrete script in .ralph/<loop-name>.sh with the selected
 # agent command baked in.
 #
-# The finalize() function (push + PR creation) is CONDITIONAL. Only include it
-# in generated scripts if the user opted for auto-push+PR in Step 2d. If they
-# chose local-only, omit finalize() entirely and remove the finalize calls.
-#
-# When including finalize(), replace DEFAULT_BRANCH with the actual base branch
-# detected at generation time (e.g., "main" or "master"). Do NOT rely on
-# runtime detection — bake the value in.
+# The section between "BEGIN: AUTO-PUSH+PR" and "END: AUTO-PUSH+PR" markers is
+# CONDITIONAL. Only include it if the user opted for auto-push+PR in Step 2d.
+# If they chose local-only, delete that entire section and the finalize() call
+# sites in the loop. See the markers and comments in the section for details.
 #
 # Usage: .ralph/<loop-name>.sh [max_iterations]
 
 set -e
 
 MAX_ITERATIONS=${1:-10}
+if ! [[ "$MAX_ITERATIONS" =~ ^[0-9]+$ ]] || [ "$MAX_ITERATIONS" -eq 0 ]; then
+  echo "Error: max_iterations must be a positive integer (got: '$MAX_ITERATIONS')"
+  exit 1
+fi
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "Error: jq is required but not installed. Install it with:"
+  echo "  brew install jq    # macOS"
+  echo "  apt install jq     # Debian/Ubuntu"
+  exit 1
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 PRD_FILE="$PROJECT_DIR/prd.json"
@@ -80,18 +89,21 @@ if [ ! -f "$PROGRESS_FILE" ]; then
   echo "---" >> "$PROGRESS_FILE"
 fi
 
-# === AUTO-PUSH+PR CONFIGURATION (set during generation) ===
-# Set to "true" if the user opted for auto-push+PR in Step 2d, "false" otherwise.
-# When generating a concrete script: if the user said yes, set to "true" and
-# replace DEFAULT_BRANCH with the detected base branch. If no, set to "false".
+# === BEGIN: AUTO-PUSH+PR (include this section only if user opted in at Step 2d) ===
+# When generating a concrete script:
+#   - If the user said YES to auto-push+PR: include this entire section and set
+#     DEFAULT_BRANCH to the detected base branch (main/master).
+#   - If the user said NO: delete this entire section (from BEGIN to END marker)
+#     and also remove the two `if [ "$AUTO_PUSH_PR" = "true" ]` blocks in the
+#     loop below.
 AUTO_PUSH_PR="false"
-# Baked in at generation time. Only used when AUTO_PUSH_PR="true".
-# Detected by checking: does refs/remotes/origin/main exist? Use "main".
-# Else does refs/remotes/origin/master exist? Use "master". Else default "main".
+# Baked in at generation time by checking:
+#   1. Does refs/remotes/origin/main exist? → "main"
+#   2. Does refs/remotes/origin/master exist? → "master"
+#   3. Neither → default to "main"
 DEFAULT_BRANCH="main"
 
-# Push branch and create PR after the loop ends (success or max iterations).
-# Only called when AUTO_PUSH_PR="true". Errors here are handled gracefully —
+# Push branch and create PR after the loop ends. Errors are handled gracefully —
 # a push or PR failure never masks a successful loop run.
 finalize() {
   local status="$1"
@@ -164,10 +176,11 @@ Check \`prd.json\` for story status and \`progress.txt\` for details on what was
 
   echo "PR created."
 }
+# === END: AUTO-PUSH+PR ===
 
 echo "Starting Ralph - Max iterations: $MAX_ITERATIONS"
 
-for i in $(seq 1 $MAX_ITERATIONS); do
+for i in $(seq 1 "$MAX_ITERATIONS"); do
   echo ""
   echo "═══════════════════════════════════════════════════════"
   echo "  Ralph Iteration $i of $MAX_ITERATIONS"
