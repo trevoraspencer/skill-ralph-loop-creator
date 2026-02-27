@@ -53,9 +53,11 @@ Write `decomp.json` to the project root:
   "feature_name": "<inferred from input>",
   "source_urls": ["<all URLs fetched>"],
   "capability_surface": "<full capability surface from Step 2>",
-  "nodes": [ /* one node per top-level cluster, each with status "needs_split" */ ],
+  "nodes": [ /* one node per top-level cluster, each with status "needs_split" and id format N-<digits> (e.g. N-001) */ ],
   "completed_at": null
 }
+
+Use unique node IDs in strictly increasing order, starting at `N-001`.
 
 ## Step 6: Generate the loop script
 

@@ -28,6 +28,10 @@ would be, the node is too coarse.
 child's status to `needs_split`. Add each child node to the top-level `nodes` array with
 `parent_id` set to this node's id.
 
+Node IDs must use the format `N-<digits>` (for example `N-001`) and be unique.
+When you create child nodes, assign each child `id` by auto-incrementing from the
+highest existing node ID in the file.
+
 **If granular enough:** Change the node's status from `needs_split` to `needs_stories`.
 Do not add children.
 

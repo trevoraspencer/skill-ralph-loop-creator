@@ -48,7 +48,8 @@ TMP6="$(mktemp -d)"
 TMP7="$(mktemp -d)"
 TMP8="$(mktemp -d)"
 TMP9="$(mktemp -d)"
-trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9"' EXIT
+TMP10="$(mktemp -d)"
+trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9" "$TMP10"' EXIT
 
 # Test 1: successful completion when agent emits COMPLETE marker.
 mkdir -p "$TMP1/.ralph"
@@ -279,6 +280,38 @@ if (cd "$TMP9" && ./.ralph/decompose-smoke.sh 1 >"$TMP9/out.txt" 2>&1); then
 fi
 assert_contains "$TMP9/out.txt" "not installed or not on PATH" "decompose: agent binary preflight"
 echo "  Test 9 passed: missing agent binary"
+
+# Test 10: decompose.sh rejects non-numeric max_iterations
+mkdir -p "$TMP10/.ralph"
+render_decompose_script "$TMP10/.ralph/decompose-smoke.sh" "custom" "" "smoke"
+cp "$ROOT_DIR/scripts/decompose-prompt.md" "$TMP10/.ralph/decompose-smoke-prompt.md"
+cat > "$TMP10/decomp.json" <<'JSON'
+{
+  "feature_name": "Test Feature",
+  "source_urls": [],
+  "capability_surface": "test",
+  "nodes": [
+    {
+      "id": "N-001",
+      "parent_id": null,
+      "title": "Needs Split Node",
+      "description": "This node needs splitting.",
+      "status": "needs_split",
+      "children": [],
+      "stories": []
+    }
+  ],
+  "completed_at": null
+}
+JSON
+
+if (cd "$TMP10" && CUSTOM_CMD='echo "should not run"' ./.ralph/decompose-smoke.sh abc >"$TMP10/out.txt" 2>&1); then
+  echo "FAIL: non-numeric max_iterations should fail"
+  cat "$TMP10/out.txt"
+  exit 1
+fi
+assert_contains "$TMP10/out.txt" "max_iterations must be a positive integer" "decompose: invalid max_iterations"
+echo "  Test 10 passed: invalid max_iterations"
 
 echo ""
 echo "All decompose template smoke tests passed."

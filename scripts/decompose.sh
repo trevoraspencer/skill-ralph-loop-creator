@@ -12,6 +12,11 @@ PRD_FILE="prd.json"
 MAX_ITERS="${1:-50}"
 # --- End configuration ---
 
+if ! [[ "$MAX_ITERS" =~ ^[0-9]+$ ]] || [ "$MAX_ITERS" -eq 0 ]; then
+  echo "Error: max_iterations must be a positive integer (got: '$MAX_ITERS')"
+  exit 1
+fi
+
 # Validate dependencies
 command -v jq >/dev/null 2>&1 || {
   echo "Error: jq is required but not installed. Install it with:"
@@ -76,7 +81,7 @@ while [ "$iter" -lt "$MAX_ITERS" ]; do
 
   # Validate node ID format to prevent sed injection
   if ! printf '%s' "$NEXT_NODE" | grep -qE '^N-[0-9]+$'; then
-    echo "Error: unexpected node ID format: '$NEXT_NODE'. Expected N-NNN."
+    echo "Error: unexpected node ID format: '$NEXT_NODE'. Expected N-<digits>."
     exit 1
   fi
 
