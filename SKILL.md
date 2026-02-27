@@ -1,6 +1,6 @@
 ---
 name: ralph
-description: "Agent-agnostic autonomous loop creator. Use when asked to 'use ralph', 'ralph this', or to autonomously implement a feature end-to-end. Creates prd.json with user stories, generates a custom loop script in .ralph/, then executes user stories one by one until complete using whichever AI coding agent the user chooses."
+description: "Agent-agnostic autonomous loop creator. Use when asked to 'use ralph', 'ralph this', 'reverse ralph', 'decompose a feature', or '/ralph decompose'. Forward mode implements features end-to-end; decompose mode breaks existing features into atomic user stories for reimplementation."
 ---
 
 # Ralph - Agent-Agnostic Autonomous Loop Creator
@@ -265,3 +265,73 @@ If the user chose local-only, the script simply exits after the loop. All commit
 | `progress.txt` | Append-only learnings for future iterations |
 | `.ralph/<name>.sh` | Generated loop script with agent command baked in |
 | `.ralph/<name>-prompt.md` | Prompt file for the loop (copy of `scripts/prompt.md`) |
+
+## Decompose Mode
+
+Triggered by: `/ralph decompose <input>` or natural language like "reverse ralph this feature",
+"decompose X into a replication plan", "break this feature down into user stories".
+
+### What it does
+
+Reverse Ralph takes any description of an existing feature and decomposes it — recursively
+and completely — into an atomized `prd.json` that a forward Ralph loop can execute to
+greenfield-reimplement the feature.
+
+Decomposition is behavioral and functional: it captures what the feature does and how it
+behaves from the outside, not how it is built internally. The forward loop handles all
+implementation decisions.
+
+### Inputs accepted
+
+- URLs (fetched and spidered up to 2 hops of linked documentation)
+- Local file paths (read directly)
+- Natural language descriptions
+- Any combination of the above
+
+### Agent workflow
+
+1. **Gather inputs.** Read all provided sources. For URLs, fetch the page and follow
+   documentation links up to 2 hops deep (same documentation domain only). Synthesize
+   all gathered content into a capability surface: a structured description of all
+   observable behaviors, states, inputs, outputs, configuration options, and integrations
+   of the feature.
+
+2. **Ask the loop name.** Ask the user what to name this decomposition run. Used for the
+   generated script filename: `.ralph/decompose-<n>.sh`.
+
+3. **Ask which execution agent** to use for the decomposition loop. Same agent matrix as
+   forward Ralph: `claude`, `droid`, `codex`, `opencode`, `gemini`, `copilot`,
+   `cc-compatible`, or `custom`.
+
+4. **Ask which model** (optional — leave blank to use the CLI default).
+
+5. **Seed `decomp.json`.** Generate the initial state file with top-level capability
+   clusters extracted from the capability surface. Each cluster gets status `needs_split`.
+
+6. **Generate `.ralph/decompose-<n>.sh`** from `scripts/decompose.sh`, substituting
+   `__AGENT__`, `__MODEL__`, and `__LOOP_NAME__`. Copy `scripts/decompose-prompt.md` to
+   `.ralph/decompose-<n>-prompt.md`.
+
+7. **Instruct the user** to run:
+   ```
+   .ralph/decompose-<n>.sh [max_iterations]
+   ```
+   Default `max_iterations` is 50. The loop runs autonomously until all leaf nodes in
+   `decomp.json` have status `atomic` (split parent nodes get status `split`), then
+   emits `prd.json`.
+
+### Known Limitations
+
+- **Context window**: The full `decomp.json` is appended to each iteration's prompt.
+  For very large feature decompositions (hundreds of nodes), this may approach agent
+  context limits. If this happens, increase `max_iterations` and let the loop resume
+  across runs.
+
+### Decompose Files Reference
+
+| File | Purpose |
+|------|---------|
+| `decomp.json` | Decomposition state tree with nodes and status |
+| `prd.json` | Final output — forward-Ralph-compatible flat story list |
+| `.ralph/decompose-<n>.sh` | Generated decomposition loop script |
+| `.ralph/decompose-<n>-prompt.md` | Prompt file for the decomposition loop |
