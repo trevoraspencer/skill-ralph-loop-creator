@@ -1,6 +1,6 @@
 ---
 name: ralph
-description: "Agent-agnostic autonomous loop creator. Use when asked to 'use ralph', 'ralph this', or to autonomously implement a feature end-to-end. Creates prd.json with user stories, generates a custom loop script in .ralph/, then executes user stories one by one until complete using whichever AI coding agent the user chooses. Also USE FOR: 'reverse ralph', 'decompose a feature', 'reverse loop', '/ralph decompose', analyzing an existing feature to produce a replication plan, breaking down a feature into user stories for reimplementation. DO NOT USE the decompose mode for: building new features (use forward ralph), debugging existing code."
+description: "Agent-agnostic autonomous loop creator. Use when asked to 'use ralph', 'ralph this', 'reverse ralph', 'decompose a feature', or '/ralph decompose'. Forward mode implements features end-to-end; decompose mode breaks existing features into atomic user stories for reimplementation."
 ---
 
 # Ralph - Agent-Agnostic Autonomous Loop Creator
@@ -316,8 +316,16 @@ implementation decisions.
    ```
    .ralph/decompose-<n>.sh [max_iterations]
    ```
-   Default `max_iterations` is 50. The loop runs autonomously until all nodes in
-   `decomp.json` have status `atomic`, then emits `prd.json`.
+   Default `max_iterations` is 50. The loop runs autonomously until all leaf nodes in
+   `decomp.json` have status `atomic` (split parent nodes get status `split`), then
+   emits `prd.json`.
+
+### Known Limitations
+
+- **Context window**: The full `decomp.json` is appended to each iteration's prompt.
+  For very large feature decompositions (hundreds of nodes), this may approach agent
+  context limits. If this happens, increase `max_iterations` and let the loop resume
+  across runs.
 
 ### Decompose Files Reference
 

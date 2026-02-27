@@ -23,10 +23,10 @@ to make architectural decisions — things like "which module handles this", "wh
 structure is used", "how is state persisted". If you are not sure what those decisions
 would be, the node is too coarse.
 
-**If too coarse:** Split it. Set its status to `needs_split` (unchanged) and add 2–6
-child nodes to its `children` array. Each child represents a distinct behavioral
-sub-capability. Set each child's status to `needs_split`. Add each child node to the
-top-level `nodes` array with `parent_id` set to this node's id.
+**If too coarse:** Split it. Change its status to `split` and add 2–6 child nodes to its
+`children` array. Each child represents a distinct behavioral sub-capability. Set each
+child's status to `needs_split`. Add each child node to the top-level `nodes` array with
+`parent_id` set to this node's id.
 
 **If granular enough:** Change the node's status from `needs_split` to `needs_stories`.
 Do not add children.
