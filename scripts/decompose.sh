@@ -6,9 +6,11 @@ set -euo pipefail
 AGENT="__AGENT__"            # e.g. claude, droid, codex, opencode, gemini, copilot
 MODEL="__MODEL__"            # empty string = use CLI default
 LOOP_NAME="__LOOP_NAME__"
-PROMPT_FILE=".ralph/decompose-${LOOP_NAME}-prompt.md"
-DECOMP_FILE="decomp.json"
-PRD_FILE="prd.json"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+PROMPT_FILE="$SCRIPT_DIR/decompose-${LOOP_NAME}-prompt.md"
+DECOMP_FILE="$PROJECT_DIR/decomp.json"
+PRD_FILE="$PROJECT_DIR/prd.json"
 MAX_ITERS="${1:-50}"
 # --- End configuration ---
 
@@ -161,7 +163,9 @@ while [ "$iter" -lt "$MAX_ITERS" ]; do
       ;;
 
     custom)
-      eval "$CUSTOM_CMD"
+      # Override PROMPT_FILE so custom commands referencing $PROMPT_FILE get the
+      # per-iteration prompt (with node ID + decomp.json appended), not the base template.
+      (PROMPT_FILE="$ITER_PROMPT_FILE"; eval "$CUSTOM_CMD")
       ;;
 
     *)
@@ -183,6 +187,7 @@ while [ "$iter" -lt "$MAX_ITERS" ]; do
   fi
 
   echo "  Iteration $iter complete."
+  sleep 2
 done
 
 # Final check (covers break-early path)
@@ -194,23 +199,27 @@ if [ "$PENDING" -gt 0 ]; then
   exit 0
 fi
 
-# Emit prd.json from atomic leaf node stories, sorted by priority
+# Emit prd.json from atomic leaf node stories, sorted by priority.
+# Output uses forward-Ralph-compatible schema: branchName, userStories, camelCase fields.
 echo "Emitting prd.json..."
 jq '{
-  feature: .feature_name,
-  stories: [
+  project: .feature_name,
+  branchName: ("ralph/" + (.feature_name | gsub("[^a-zA-Z0-9]+"; "-") | ascii_downcase | gsub("^-+|-+$"; ""))),
+  description: .capability_surface,
+  userStories: [
     .nodes[] | select(.status == "atomic") | .stories[] | {
       id,
       title,
       description,
-      acceptance_criteria,
-      depends_on,
+      acceptanceCriteria: .acceptance_criteria,
+      dependsOn: .depends_on,
       priority,
-      passes: false
+      passes: false,
+      notes: ""
     }
   ] | sort_by(.priority)
 }' "$DECOMP_FILE" > "$PRD_FILE"
 
-STORY_COUNT=$(jq '.stories | length' "$PRD_FILE")
+STORY_COUNT=$(jq '.userStories | length' "$PRD_FILE")
 echo "Done. prd.json written with $STORY_COUNT atomic stories."
 echo "Run forward Ralph: .ralph/<your-forward-loop-name>.sh"

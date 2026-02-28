@@ -135,6 +135,9 @@ project/
 - `SKILL.md`: main Ralph instructions and workflow
 - `scripts/ralph.sh`: reference loop template used when generating `.ralph/<loop-name>.sh`
 - `scripts/prompt.md`: prompt template copied to `.ralph/<loop-name>-prompt.md`
+- `scripts/decompose.sh`: decompose loop template used when generating `.ralph/decompose-<n>.sh`
+- `scripts/decompose-prompt.md`: per-iteration decompose prompt copied to `.ralph/decompose-<n>-prompt.md`
+- `scripts/decompose-init-prompt.md`: initialization prompt used by the orchestrating agent during decompose setup
 - `scripts/test-template.sh`: smoke tests for template preflight + completion behavior
 
 ## Development Check

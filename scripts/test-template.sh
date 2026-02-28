@@ -229,6 +229,20 @@ if [ ! -f "$TMP7/prd.json" ]; then
   echo "FAIL: prd.json was not created"
   exit 1
 fi
+# Verify prd.json uses forward-Ralph-compatible schema (branchName + userStories + camelCase)
+if ! jq -e '
+  type == "object" and
+  (.branchName | type == "string" and length > 0) and
+  (.userStories | type == "array" and length == 1) and
+  (.userStories[0].acceptanceCriteria | type == "array") and
+  (.userStories[0].notes | type == "string") and
+  (.userStories[0].passes == false)
+' "$TMP7/prd.json" >/dev/null 2>&1; then
+  echo "FAIL: prd.json schema is not forward-Ralph-compatible"
+  echo "--- prd.json ---"
+  cat "$TMP7/prd.json"
+  exit 1
+fi
 echo "  Test 7 passed: all-atomic skip and prd.json emission"
 
 # Test 8: needs_split node with max_iterations=1 runs exactly one agent call and exits
