@@ -1,113 +1,80 @@
 # Repo Evaluation: Errors and Inconsistencies
 
-## Critical
+All issues identified below have been fixed. This file is retained for reference.
 
-### 1. Decompose `prd.json` output is incompatible with forward Ralph
+## Critical (fixed)
 
-The decompose pipeline claims to produce "forward-Ralph-compatible" output
-(`SKILL.md` Decompose Files Reference, `decompose-init-prompt.md` Step 7), but the
-schemas are fundamentally mismatched.
+### 1. Decompose `prd.json` output was incompatible with forward Ralph
 
-**Forward Ralph expects** (validated in `ralph.sh:51-57`):
+**Problem:** `decompose.sh` emitted `{feature, stories}` with `acceptance_criteria`
+(snake_case). Forward Ralph validates for `{branchName, userStories}` with
+`acceptanceCriteria` (camelCase). Running forward Ralph on decompose output failed
+at preflight.
 
-```json
-{
-  "branchName": "ralph/feature",
-  "userStories": [
-    {
-      "acceptanceCriteria": ["..."],
-      "notes": "",
-      "passes": false
-    }
-  ]
-}
-```
-
-**Decompose emits** (`decompose.sh:199-212`):
-
-```json
-{
-  "feature": "...",
-  "stories": [
-    {
-      "acceptance_criteria": ["..."],
-      "depends_on": [],
-      "passes": false
-    }
-  ]
-}
-```
-
-Specific mismatches:
-
-| Field | Forward Ralph | Decompose Output |
-|-------|--------------|-----------------|
-| Top-level key for stories | `userStories` | `stories` |
-| Top-level project identifier | `project` + `branchName` (required) | `feature` (no `branchName`) |
-| Acceptance criteria key | `acceptanceCriteria` (camelCase) | `acceptance_criteria` (snake_case) |
-| Notes field | `notes` (present) | missing |
-| Dependencies field | missing | `depends_on` (present) |
-
-Running forward Ralph on decompose output **fails immediately** at the `ralph.sh`
-preflight check with: *"Error: prd.json is invalid. It must include non-empty string
-branchName and array userStories."*
+**Fix:** Updated `decompose.sh` jq query to emit forward-Ralph-compatible schema:
+`branchName` (derived from feature name), `userStories`, `acceptanceCriteria`,
+`notes`, and `passes` fields. Added a test assertion verifying schema compatibility.
 
 ---
 
-## Moderate
+## Moderate (fixed)
 
-### 2. `decompose.sh` custom agent gets wrong prompt variable
+### 2. `decompose.sh` custom agent got wrong prompt variable
 
-In `decompose.sh:163-164`, the `custom` agent case runs `eval "$CUSTOM_CMD"`. Per
-SKILL.md, custom commands reference `$PROMPT_FILE`. But inside the decompose loop,
-`PROMPT_FILE` (line 9) points to the base template, while the actual per-iteration
-prompt (with node ID substituted and `decomp.json` appended) is `ITER_PROMPT_FILE`.
-Every other agent branch correctly uses `$ITER_PROMPT_FILE`.
+**Problem:** `eval "$CUSTOM_CMD"` exposed `$PROMPT_FILE` (base template) instead of
+`$ITER_PROMPT_FILE` (per-iteration prompt with node ID and decomp.json appended).
 
-### 3. README "Repo Layout" section is incomplete
+**Fix:** Wrapped custom eval in a subshell that overrides `PROMPT_FILE` to
+`$ITER_PROMPT_FILE`.
 
-`README.md:135-139` lists only 4 files. Missing:
+### 3. README "Repo Layout" section was incomplete
 
-- `scripts/decompose.sh` — the decompose loop template
-- `scripts/decompose-prompt.md` — the per-iteration decompose prompt
-- `scripts/decompose-init-prompt.md` — the decompose initialization prompt
+**Problem:** Missing `scripts/decompose.sh`, `scripts/decompose-prompt.md`, and
+`scripts/decompose-init-prompt.md`.
 
-### 4. `decompose-init-prompt.md` is unreferenced
+**Fix:** Added all three files to the Repo Layout section.
 
-The file `scripts/decompose-init-prompt.md` exists but is never mentioned in
-`SKILL.md` or `README.md`. The SKILL.md decompose workflow (Step 6) mentions copying
-`scripts/decompose.sh` and `scripts/decompose-prompt.md` but never references the
-init prompt. It is unclear how the agent should use this file.
+### 4. `decompose-init-prompt.md` was unreferenced
+
+**Problem:** The file existed but was never mentioned in `SKILL.md` or `README.md`.
+
+**Fix:** Added reference in SKILL.md decompose agent workflow and Decompose Files
+Reference table. Added to README Repo Layout.
 
 ### 5. "CC-Mirror" vs "cc-compatible" naming
 
-`ralph.sh:226` uses the name `CC-Mirror` in its comment block. Every other file
-(`SKILL.md`, `README.md`, `decompose.sh`) consistently calls this `cc-compatible`.
+**Problem:** `ralph.sh` line 226 used stale name "CC-Mirror".
+
+**Fix:** Renamed to "CC-compatible" to match all other files.
 
 ---
 
-## Minor
+## Minor (fixed)
 
 ### 6. Inconsistent shebang lines
 
-- `ralph.sh`: `#!/bin/bash`
-- `decompose.sh`, `test-template.sh`: `#!/usr/bin/env bash`
+**Problem:** `ralph.sh` used `#!/bin/bash` while other scripts used
+`#!/usr/bin/env bash`.
 
-### 7. Inconsistent placeholder conventions
+**Fix:** Changed `ralph.sh` to `#!/usr/bin/env bash`.
 
-Three different placeholder styles:
+### 7. Placeholder conventions
 
-- `ralph.sh`: `AGENT_BIN_HERE` / `AGENT_COMMAND_HERE`
-- `decompose.sh`: `__AGENT__` / `__MODEL__` / `__LOOP_NAME__`
-- `decompose-init-prompt.md`: `{{INPUTS}}`
+Three different placeholder styles exist across the project (`AGENT_BIN_HERE`,
+`__AGENT__`, `{{INPUTS}}`). Each serves a different substitution mechanism (AI
+template reading, sed, agent prompt interpolation), so this is by design and was
+left as-is.
 
-### 8. Relative vs absolute path construction
+### 8. Relative vs absolute path construction in `decompose.sh`
 
-`ralph.sh` builds absolute paths from `SCRIPT_DIR`. `decompose.sh` uses relative
-paths from CWD (`PROMPT_FILE=".ralph/decompose-${LOOP_NAME}-prompt.md"`). Running
-`decompose.sh` from a subdirectory would break all paths.
+**Problem:** `decompose.sh` used relative paths from CWD, breaking if run from a
+subdirectory.
+
+**Fix:** Added `SCRIPT_DIR`/`PROJECT_DIR` computation (matching `ralph.sh`) and
+derived all paths as absolute.
 
 ### 9. No sleep between decompose iterations
 
-`ralph.sh:250` has `sleep 2` between iterations (documented in SKILL.md).
-`decompose.sh` has no sleep, risking API rate-limiting with high iteration counts.
+**Problem:** `ralph.sh` has `sleep 2` between iterations; `decompose.sh` did not.
+
+**Fix:** Added `sleep 2` after each iteration in `decompose.sh`.

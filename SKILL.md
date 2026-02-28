@@ -290,6 +290,8 @@ implementation decisions.
 
 ### Agent workflow
 
+Follow the detailed instructions in `scripts/decompose-init-prompt.md` for steps 1–7 below.
+
 1. **Gather inputs.** Read all provided sources. For URLs, fetch the page and follow
    documentation links up to 2 hops deep (same documentation domain only). Synthesize
    all gathered content into a capability surface: a structured description of all
@@ -331,6 +333,7 @@ implementation decisions.
 
 | File | Purpose |
 |------|---------|
+| `scripts/decompose-init-prompt.md` | Initialization prompt for the orchestrating agent (steps 1–7) |
 | `decomp.json` | Decomposition state tree with nodes and status |
 | `prd.json` | Final output — forward-Ralph-compatible flat story list |
 | `.ralph/decompose-<n>.sh` | Generated decomposition loop script |

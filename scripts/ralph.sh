@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Ralph Loop Script — Reference Template
 #
 # This file serves as the structural reference for generating loop scripts.
@@ -223,7 +223,7 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
   # OpenCode:       opencode run --yolo -m MODEL "$(cat "$PROMPT_FILE")"
   # Gemini CLI:     gemini -p "$(cat "$PROMPT_FILE")" --yolo -m MODEL
   # GitHub Copilot: copilot -p "$(cat "$PROMPT_FILE")" --yolo --model MODEL
-  # CC-Mirror:      $BINARY -p "$(cat "$PROMPT_FILE")" --dangerously-skip-permissions --model MODEL
+  # CC-compatible:  $BINARY -p "$(cat "$PROMPT_FILE")" --dangerously-skip-permissions --model MODEL
   set +e
   OUTPUT=$(AGENT_COMMAND_HERE 2>&1 | tee /dev/stderr)
   AGENT_EXIT=$?
