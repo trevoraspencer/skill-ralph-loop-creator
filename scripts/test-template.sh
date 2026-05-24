@@ -60,7 +60,11 @@ TMP18="$(mktemp -d)"
 TMP19="$(mktemp -d)"
 TMP20="$(mktemp -d)"
 TMP21="$(mktemp -d)"
-trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9" "$TMP10" "$TMP11" "$TMP12" "$TMP13" "$TMP14" "$TMP15" "$TMP16" "$TMP17" "$TMP18" "$TMP19" "$TMP20" "$TMP21"' EXIT
+TMP22="$(mktemp -d)"
+TMP23="$(mktemp -d)"
+TMP24="$(mktemp -d)"
+TMP25="$(mktemp -d)"
+trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9" "$TMP10" "$TMP11" "$TMP12" "$TMP13" "$TMP14" "$TMP15" "$TMP16" "$TMP17" "$TMP18" "$TMP19" "$TMP20" "$TMP21" "$TMP22" "$TMP23" "$TMP24" "$TMP25"' EXIT
 
 # Test 1: successful completion when agent emits COMPLETE marker.
 mkdir -p "$TMP1/.ralph"
@@ -753,3 +757,133 @@ echo "  Test 21 passed: pipeline shared-includes prepend per-phase"
 
 echo ""
 echo "All pipeline mode smoke tests passed."
+
+# ═══════════════════════════════════════════════════════
+# Shell-phase tests (pipeline.sh) + prefetcher tests (prefetch.sh)
+# ═══════════════════════════════════════════════════════
+
+PREFETCH_SCRIPT="$ROOT_DIR/scripts/prefetch.sh"
+
+echo ""
+echo "Running shell-phase + prefetcher smoke tests..."
+
+# Test 22: pipeline shell phase under DRY_RUN prints what would run; does not execute the script
+mkdir -p "$TMP22/.ralph/demo/phases"
+render_pipeline_script "$TMP22/.ralph/demo.sh" "custom" "" "demo"
+cat > "$TMP22/.ralph/demo/pipeline.json" <<'JSON'
+{
+  "name": "demo",
+  "phases": [
+    { "id": "p01", "type": "shell", "script": "phases/p01.sh", "commit": "shell phase" }
+  ]
+}
+JSON
+cat > "$TMP22/.ralph/demo/phases/p01.sh" <<'SH'
+#!/usr/bin/env bash
+echo "SHELL_PHASE_SCRIPT_RAN" > "$TMP22/shell-marker.txt"
+SH
+chmod +x "$TMP22/.ralph/demo/phases/p01.sh"
+
+if ! (cd "$TMP22" && DRY_RUN=1 CUSTOM_CMD='echo noop' ./.ralph/demo.sh 1 >"$TMP22/out.txt" 2>&1); then
+  echo "FAIL: shell-phase DRY_RUN should exit 0"
+  cat "$TMP22/out.txt"
+  exit 1
+fi
+assert_contains "$TMP22/out.txt" "would run shell script" "shell DRY_RUN: banner shown"
+assert_contains "$TMP22/out.txt" "phases/p01.sh" "shell DRY_RUN: script path shown"
+if [ -f "$TMP22/shell-marker.txt" ]; then
+  echo "FAIL: shell script must not execute under DRY_RUN"
+  exit 1
+fi
+echo "  Test 22 passed: shell-phase DRY_RUN does not execute"
+
+# Test 23: pipeline shell phase real run executes script and commits changes
+mkdir -p "$TMP23/.ralph/demo/phases"
+init_git_repo "$TMP23"
+render_pipeline_script "$TMP23/.ralph/demo.sh" "custom" "" "demo"
+cat > "$TMP23/.ralph/demo/pipeline.json" <<'JSON'
+{
+  "name": "demo",
+  "phases": [
+    { "id": "p01", "type": "shell", "script": "phases/p01.sh", "commit": "shell: write file" }
+  ]
+}
+JSON
+cat > "$TMP23/.ralph/demo/phases/p01.sh" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+mkdir -p "${PROJECT_DIR}/evidence"
+echo "fetched content from $(date)" > "${PROJECT_DIR}/evidence/sample.md"
+echo "  shell script ran in pipeline $PIPELINE_NAME, wrote evidence/sample.md"
+SH
+chmod +x "$TMP23/.ralph/demo/phases/p01.sh"
+
+if ! (cd "$TMP23" && CUSTOM_CMD='echo noop' ./.ralph/demo.sh 1 >"$TMP23/out.txt" 2>&1); then
+  echo "FAIL: shell-phase real run should exit 0"
+  cat "$TMP23/out.txt"
+  exit 1
+fi
+assert_contains "$TMP23/out.txt" "Phase p01 (shell)" "shell real: phase header"
+if [ ! -f "$TMP23/evidence/sample.md" ]; then
+  echo "FAIL: shell script should have written evidence/sample.md"
+  ls -la "$TMP23/" "$TMP23/evidence/" 2>&1
+  cat "$TMP23/out.txt"
+  exit 1
+fi
+# Verify the commit landed
+last_commit_msg=$(git -C "$TMP23" log -1 --pretty=%s)
+if [ "$last_commit_msg" != "shell: write file" ]; then
+  echo "FAIL: expected commit 'shell: write file', got: $last_commit_msg"
+  exit 1
+fi
+echo "  Test 23 passed: shell-phase real run executes script and commits"
+
+# Test 24: shell phase with missing script fails preflight
+mkdir -p "$TMP24/.ralph/demo"
+render_pipeline_script "$TMP24/.ralph/demo.sh" "custom" "" "demo"
+cat > "$TMP24/.ralph/demo/pipeline.json" <<'JSON'
+{
+  "name": "demo",
+  "phases": [
+    { "id": "p01", "type": "shell", "script": "phases/does-not-exist.sh", "commit": "x" }
+  ]
+}
+JSON
+
+if (cd "$TMP24" && CUSTOM_CMD='echo noop' ./.ralph/demo.sh 1 >"$TMP24/out.txt" 2>&1); then
+  echo "FAIL: missing shell script should fail"
+  cat "$TMP24/out.txt"
+  exit 1
+fi
+assert_contains "$TMP24/out.txt" "not found" "shell preflight: missing script error"
+echo "  Test 24 passed: shell phase missing script fails preflight"
+
+# Test 25: prefetch.sh local_file class copies a local file to evidence/<class>/<slug>
+# Tests only local_file class — http_get_md, github_* classes need network and are skipped here.
+mkdir -p "$TMP25/source"
+echo "LOCAL_FILE_CONTENT_FOR_PREFETCH" > "$TMP25/source/internal-doc.md"
+cat > "$TMP25/manifest.tsv" <<TSV
+class	slug	identifier	notes
+local_file	internal-doc	source/internal-doc.md	an internal doc
+TSV
+
+if ! (cd "$TMP25" && "$PREFETCH_SCRIPT" "$TMP25/manifest.tsv" "$TMP25/evidence" >"$TMP25/out.txt" 2>&1); then
+  echo "FAIL: prefetch.sh on local_file should exit 0"
+  cat "$TMP25/out.txt"
+  exit 1
+fi
+if [ ! -f "$TMP25/evidence/local_file/internal-doc.md" ]; then
+  echo "FAIL: prefetch did not produce evidence/local_file/internal-doc.md"
+  ls -laR "$TMP25/evidence" 2>&1 || true
+  cat "$TMP25/out.txt"
+  exit 1
+fi
+if ! grep -q "LOCAL_FILE_CONTENT_FOR_PREFETCH" "$TMP25/evidence/local_file/internal-doc.md"; then
+  echo "FAIL: prefetched local_file content does not match source"
+  cat "$TMP25/evidence/local_file/internal-doc.md"
+  exit 1
+fi
+echo "  Test 25 passed: prefetch.sh handles local_file class"
+
+echo ""
+echo "All shell-phase + prefetcher smoke tests passed."

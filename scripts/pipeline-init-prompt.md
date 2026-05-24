@@ -2,13 +2,22 @@ You are running the initialization phase of Forge pipeline mode.
 
 ## What pipeline mode is
 
-A pipeline is an ordered sequence of phases sandwiching a loop:
+A pipeline is an ordered sequence of phases. The typical shape:
 
 ```
-bootstrap (1+ one-shot phases)
-  → loop (1+ phases, each iterates a markdown-checklist queue)
-    → wrap-up (1+ one-shot phases: aggregate, audit, freeze)
+bootstrap   (1+ one-shot phases — scaffold dirs, seed queues)
+  → pre-fetch (optional shell phase — pull external corpus to local disk)
+    → loop  (1+ phases — iterate a markdown-checklist queue, fresh context per item)
+      → wrap-up (1+ one-shot phases — aggregate, audit, freeze)
 ```
+
+**Phase types available:**
+
+- `oneshot` — agent invoked once with a prompt; driver commits any changes
+- `loop` — agent invoked per pending item in a markdown-checklist queue
+- `shell` — arbitrary script (no agent); ideal for pre-fetching external sources,
+  build steps, file transforms. Script receives `PIPELINE_DIR`, `PIPELINE_NAME`,
+  `PROJECT_DIR` as env vars.
 
 Each phase commits to git independently. State lives on disk. Loop phases use fresh
 agent context per iteration. Wrap-up phases assume all upstream loops have drained.
@@ -110,6 +119,25 @@ For each phase prompt, start from the templates in `scripts/phases/`:
 Replace the `<!-- AI generating the pipeline: ... -->` comments in those templates with
 the concrete task for this pipeline. The "ONE iteration" framing in the loop template
 is load-bearing — keep it verbatim. Only edit the "Your task this iteration" section.
+
+For shell phases (e.g., pre-fetch), the user writes the script directly. If the brief
+implies pulling external sources (URLs, GitHub repos, docs sites), use the reference
+prefetcher at `scripts/prefetch.sh` plus a TSV manifest. Generate a shell phase that
+invokes it:
+
+```bash
+#!/usr/bin/env bash
+# .ralph/<pipeline-name>/phases/p02-prefetch.sh
+set -euo pipefail
+"${PROJECT_DIR}/scripts/prefetch.sh" \
+  "${PIPELINE_DIR}/manifest.tsv" \
+  "${PIPELINE_DIR}/evidence"
+```
+
+Generate the matching `manifest.tsv` from the brief's source list (tab-separated, one
+row per source: `class<TAB>slug<TAB>identifier<TAB>notes`). See `scripts/prefetch.sh`
+for the supported classes (`http_get_md`, `github_readme`, `github_issues_json`,
+`github_prs_json`, `local_file`).
 
 For the queue file (`queues/work.md`), seed it with the initial items from the brief
 (or leave it empty if the bootstrap phase will populate it):

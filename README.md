@@ -179,14 +179,18 @@ project/
         work.md                    # markdown checklist for p02
 ```
 
+**Phase types:** `oneshot` (run agent once, commit), `loop` (iterate markdown-checklist queue), `shell` (run an arbitrary script with no agent, commit changes — ideal for pre-fetching external sources).
+
 Pipeline-specific env flags:
 
-- `DRY_RUN=1 .ralph/<name>.sh` — print every phase's assembled prompt + queue contents; no agent calls.
+- `DRY_RUN=1 .ralph/<name>.sh` — print every phase's assembled prompt + queue contents; no agent calls, no script execution.
 - `START_AT=<phase-id> .ralph/<name>.sh` — skip earlier phases (resume after interruption).
 
 If a loop phase hits `max_iters` without draining its queue, downstream wrap-up phases are skipped (they assume the loop is complete). Re-run with `START_AT=<that-phase-id>` to resume.
 
 Pipeline mode uses the markdown-checklist queue convention — the agent prompt instructs it to flip the line it processed from `- [ ]` to `- [x]` as its last write. See `scripts/phases/loop-prompt-markdown-queue.md` for the loop-iteration template.
+
+**Pre-fetching external sources:** for workflows that consume URLs, GitHub repos, or local docs, declare a `shell` phase that invokes `scripts/prefetch.sh` with a TSV manifest. See [SKILL.md](SKILL.md#reference-scriptsprefetchsh--hermetic-corpus-fetcher) for the supported source classes (`http_get_md`, `github_readme`, `github_issues_json`, `github_prs_json`, `local_file`).
 
 ## Supported Execution Agents
 
@@ -230,6 +234,7 @@ The `.ralph/` runtime directory name is preserved from v1 for backward compatibi
 - `scripts/pipeline.sh`: reference multi-phase pipeline driver (substituted at generation time)
 - `scripts/pipeline-init-prompt.md`: orchestrating prompt for `/forge pipeline @brief.md`
 - `scripts/phases/`: default phase prompt templates (`bootstrap-prompt.md`, `loop-prompt-markdown-queue.md`, `wrapup-prompt.md`)
+- `scripts/prefetch.sh`: reference TSV-driven prefetcher for pulling external sources to local disk (used from shell phases)
 - `scripts/test-template.sh`: smoke tests for template preflight + completion behavior
 
 ## Development Check

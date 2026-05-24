@@ -118,6 +118,52 @@ multi-phase pipelines.
 external sources before the loop runs). Adds `curl`/`pandoc` to the preflight when
 the pipeline includes shell phases.
 
+### Added: `shell` phase type + reference prefetcher
+
+Extends pipeline mode with `shell` as a third phase type. A shell phase runs an
+arbitrary script (no agent) from `$PROJECT_DIR` with `PIPELINE_DIR`, `PIPELINE_NAME`,
+and `PROJECT_DIR` exported as env vars. After the script exits 0, the driver commits
+any changes with the phase's `commit` message. Under `DRY_RUN=1`, the script does
+NOT execute — driver prints "would run shell script" and the path.
+
+Use cases: pre-fetch external corpus to local disk (so loop iterations are
+deterministic and don't burn rate limits), run build/transform steps, finalize
+deliverables that don't need agent involvement.
+
+`scripts/pipeline.sh` changes:
+
+- Schema accepts `"type": "shell"` alongside `oneshot` and `loop`.
+- New `run_shell_phase()` validates the script is present and executable, runs it
+  with env vars exported, then commits.
+- Main dispatch case adds the `shell` branch.
+
+`scripts/prefetch.sh` (new) — TSV-driven prefetcher with five source classes:
+
+- `http_get_md` — curl + pandoc (HTML→markdown) with raw-HTML fallback on pandoc failure
+- `github_readme` — `gh api repos/<owner>/<repo>/readme` raw
+- `github_issues_json` — `gh issue list --json` (all states, limit 2000)
+- `github_prs_json` — `gh pr list --json` (all states, limit 2000)
+- `local_file` — `cp` from a project-local path
+
+Manifest format: tab-separated, one header row, columns `class\tslug\tidentifier\tnotes`.
+Outputs go to `<evidence-dir>/<class>/<slug>.<ext>`. Idempotent — existing outputs
+are skipped unless `REFRESH=1`. The prefetcher does its own preflight: it warns
+up front if `curl`/`pandoc`/`gh` are missing for the classes the manifest uses.
+
+GitHub Discussions class (which needs GraphQL pagination) is deferred — users who
+need it can adapt the script.
+
+Four new smoke tests in `scripts/test-template.sh`:
+
+- Test 22: pipeline shell phase DRY_RUN does not execute the script.
+- Test 23: pipeline shell phase real run executes the script, writes files, commits.
+- Test 24: shell phase with missing script fails preflight.
+- Test 25: `prefetch.sh` handles the `local_file` class end-to-end (no network).
+
+`http_get_md`, `github_*` classes aren't tested in CI here because they need
+network or GitHub auth. They'll be exercised when the prefetcher is used in real
+pipelines.
+
 ## Critical (fixed)
 
 ### 1. Decompose `prd.json` output was incompatible with forward Ralph
