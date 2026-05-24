@@ -243,6 +243,26 @@ back to printing manual PR-creation instructions in that case rather than
 failing the script, and the test's grep allows for either path. This is the
 "push failure never masks loop success" guarantee from the original design.
 
+### Added: pipeline loop multi-iteration progression test
+
+Test 29 covers the queue-progression behavior in pipeline `loop` phases that
+prior tests didn't exercise. T16 (DRY_RUN) and T20 (max_iters-blocks-wrapup)
+both verified loop-phase mechanics, but neither proved the loop actually
+walks through a multi-item queue in order.
+
+T29 sets up a single-loop-phase pipeline with two queue items, then runs
+with a `custom` agent whose command is the canonical "flip the first
+`- [ ]` to `- [x]`" `sed` — the contract every real loop-iteration prompt
+teaches the agent to follow. Driver is given `max_iters=3` (one above queue
+size) so completion must come via queue-empty rather than max_iters.
+
+Asserts:
+- "Queue empty after 2 iterations" message (clean exit path)
+- both queue checkboxes flipped to `- [x]`
+- exactly 2 commits with `iter:` prefix
+- commits in queue order (`iter: item-alpha` before `iter: item-beta`)
+- script exits 0
+
 ### Added: test coverage for `finalize()` graceful `gh`-missing path
 
 Test 28 explicitly exercises the gh-missing fallback that Test 27's grep
