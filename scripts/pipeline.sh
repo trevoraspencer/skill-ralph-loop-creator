@@ -186,6 +186,7 @@ run_agent() {
       ;;
     custom)
       # Custom commands reference $PROMPT_FILE; override it for the eval scope.
+      # shellcheck disable=SC2034 # PROMPT_FILE IS used — by the eval'd $CUSTOM_CMD, which shellcheck can't see into.
       (PROMPT_FILE="$prompt_file"; eval "$CUSTOM_CMD")
       ;;
     *)

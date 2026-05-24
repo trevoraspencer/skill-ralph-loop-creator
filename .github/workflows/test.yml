@@ -29,3 +29,24 @@ jobs:
 
       - name: Run smoke tests
         run: ./scripts/test-template.sh
+
+  shellcheck:
+    name: shellcheck on scripts/
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: |
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq shellcheck
+          fi
+
+      - name: Run shellcheck on all bash scripts under scripts/
+        # -x follows source directives. Inline `# shellcheck disable=...` comments
+        # in the scripts themselves handle individual false positives (one in
+        # pipeline.sh today for $PROMPT_FILE used inside eval'd $CUSTOM_CMD).
+        run: |
+          find scripts -name '*.sh' -type f -print0 \
+            | xargs -0 shellcheck -x

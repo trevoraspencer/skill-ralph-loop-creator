@@ -215,6 +215,18 @@ Plan items 1–5 (and this CI add-on) shipped the foundation. Beyond this is
 user-driven discovery from real pipeline runs — anything substantive should
 update `ERRORS.md` honestly and ship as its own small reviewable PR.
 
+### Added: shellcheck job in CI
+
+A second CI job runs `shellcheck -x` over every `*.sh` in `scripts/`. Catches
+quoting bugs, unused vars, common bash mistakes before they ship. Two minor
+issues surfaced and were fixed in the same PR:
+
+- `scripts/decompose.sh`: SC2129 — consecutive `>>` redirects refactored to a
+  single `{ ...; } >>` block writing the decomp.json appendix.
+- `scripts/pipeline.sh`: SC2034 false-positive — `PROMPT_FILE` IS used inside
+  the eval'd `$CUSTOM_CMD`, but shellcheck cannot see into `eval`. Added an
+  inline `# shellcheck disable=SC2034` directive with a comment explaining why.
+
 ## Critical (fixed)
 
 ### 1. Decompose `prd.json` output was incompatible with forward Ralph
