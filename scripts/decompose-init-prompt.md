@@ -1,4 +1,4 @@
-You are running the initialization phase of Reverse Ralph.
+You are running the initialization phase of Forge decompose mode (formerly "Reverse Ralph").
 
 ## Step 1: Gather inputs
 
@@ -74,5 +74,5 @@ Tell the user:
 - `decomp.json` has been seeded with N top-level clusters
 - Run: `.ralph/decompose-<n>.sh [max_iterations]` (default 50)
 - The loop runs autonomously until all nodes are atomic, then emits `prd.json`
-- `prd.json` feeds directly into a forward Ralph loop with no transformation
+- `prd.json` feeds directly into a forward Forge loop with no transformation
 - If interrupted, re-run the same command — it resumes where it left off

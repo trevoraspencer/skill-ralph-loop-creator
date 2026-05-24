@@ -2,6 +2,39 @@
 
 All issues identified below have been fixed. This file is retained for reference.
 
+## v2 changelog
+
+### Renamed: `/ralph` → `/forge`
+
+The skill's `name:` field and slash command were renamed to disambiguate from
+Anthropic's official `/ralph-loop` plugin (which uses an in-session re-feed pattern,
+not the external bash loop this skill generates). Repo name stays
+`skill-ralph-loop-creator` for SEO and continuity. Natural-language triggers ("use
+ralph to …", "reverse ralph this") are preserved in the skill description for
+muscle-memory continuity. Runtime directories (`.ralph/`, `.ralph-archive/`,
+`.ralph-last-branch`) and generated v1 scripts are unchanged.
+
+### Added: `DRY_RUN=1` flag
+
+Both `scripts/ralph.sh` and `scripts/decompose.sh` now honor `DRY_RUN=1` as an env
+flag. When set: the script runs all preflight checks, prints the assembled prompt
+for the first iteration to stdout, skips the agent invocation, and exits 0. Lets
+users verify a freshly-generated loop is wired correctly (prompt file present,
+agent binary on PATH, prd.json/decomp.json valid) without burning tokens.
+
+Two new smoke tests in `scripts/test-template.sh` (Test 11 forward, Test 12
+decompose) assert that the agent command does not execute and the prompt content
+is printed.
+
+### Deferred from v2 to PR 3
+
+`START_AT=<phase-id>` was bundled with DRY_RUN in the original PR 1 plan, but
+"phase" has no meaning in the v1 forward and decompose modes — those scripts
+iterate over a queue of stories/nodes, not phases. Adding `START_AT` with bolted-on
+"skip earlier stories" semantics would create a new behavior with no real-world
+demand. Deferred to PR 3 where it lands alongside the multi-phase pipeline driver
+and has a natural fit.
+
 ## Critical (fixed)
 
 ### 1. Decompose `prd.json` output was incompatible with forward Ralph

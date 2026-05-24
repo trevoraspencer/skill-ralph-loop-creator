@@ -26,8 +26,8 @@ command -v jq >/dev/null 2>&1 || {
   echo "  apt install jq     # Debian/Ubuntu"
   exit 1
 }
-[ -f "$DECOMP_FILE" ] || { echo "$DECOMP_FILE not found. Run /ralph decompose first."; exit 1; }
-[ -f "$PROMPT_FILE" ] || { echo "$PROMPT_FILE not found. Run /ralph decompose first."; exit 1; }
+[ -f "$DECOMP_FILE" ] || { echo "$DECOMP_FILE not found. Run /forge decompose first."; exit 1; }
+[ -f "$PROMPT_FILE" ] || { echo "$PROMPT_FILE not found. Run /forge decompose first."; exit 1; }
 
 # Validate agent binary is available before entering the loop
 case "$AGENT" in
@@ -58,7 +58,7 @@ iter=0
 
 while [ "$iter" -lt "$MAX_ITERS" ]; do
   iter=$((iter + 1))
-  echo "Reverse Ralph iteration $iter / $MAX_ITERS"
+  echo "Forge decompose iteration $iter / $MAX_ITERS"
 
   # Check if all leaf nodes are atomic (split nodes are done — their children carry the work)
   PENDING=$(jq '[.nodes[] | select(.status != "atomic" and .status != "split")] | length' "$DECOMP_FILE")
@@ -96,6 +96,18 @@ while [ "$iter" -lt "$MAX_ITERS" ]; do
   printf '\n## Current decomp.json\n```json\n' >> "$ITER_PROMPT_FILE"
   cat "$DECOMP_FILE" >> "$ITER_PROMPT_FILE"
   printf '\n```\n' >> "$ITER_PROMPT_FILE"
+
+  # DRY_RUN=1: print the assembled iteration prompt and exit without calling the agent.
+  if [ -n "${DRY_RUN:-}" ]; then
+    echo ""
+    echo "=== DRY_RUN: assembled prompt for node $NEXT_NODE ==="
+    cat "$ITER_PROMPT_FILE"
+    echo ""
+    echo "=== DRY_RUN: skipping agent call; exiting after iteration $iter ==="
+    rm -f "$ITER_PROMPT_FILE"
+    ITER_PROMPT_FILE=""
+    exit 0
+  fi
 
   # --- Agent dispatch ---
   # Each arm handles its own flags.
@@ -200,7 +212,7 @@ if [ "$PENDING" -gt 0 ]; then
 fi
 
 # Emit prd.json from atomic leaf node stories, sorted by priority.
-# Output uses forward-Ralph-compatible schema: branchName, userStories, camelCase fields.
+# Output uses forward-Forge-compatible schema: branchName, userStories, camelCase fields.
 echo "Emitting prd.json..."
 jq '{
   project: .feature_name,
@@ -222,4 +234,4 @@ jq '{
 
 STORY_COUNT=$(jq '.userStories | length' "$PRD_FILE")
 echo "Done. prd.json written with $STORY_COUNT atomic stories."
-echo "Run forward Ralph: .ralph/<your-forward-loop-name>.sh"
+echo "Run forward Forge: .ralph/<your-forward-loop-name>.sh"

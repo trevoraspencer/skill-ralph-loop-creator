@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Ralph Loop Script — Reference Template
+# Forge Loop Script — Reference Template
 #
 # This file serves as the structural reference for generating loop scripts.
-# When Ralph creates a new loop, the AI reads this template, understands the
+# When Forge creates a new loop, the AI reads this template, understands the
 # loop structure (archive, branch tracking, progress init, completion detection),
 # and generates a concrete script in .ralph/<loop-name>.sh with the selected
 # agent command baked in.
@@ -97,7 +97,7 @@ if [ -f "$PRD_FILE" ] && [ -f "$LAST_BRANCH_FILE" ]; then
 
     echo "   Archived to: $ARCHIVE_FOLDER"
 
-    echo "# Ralph Progress Log" > "$PROGRESS_FILE"
+    echo "# Forge Progress Log" > "$PROGRESS_FILE"
     echo "Started: $(date)" >> "$PROGRESS_FILE"
     echo "---" >> "$PROGRESS_FILE"
   fi
@@ -113,7 +113,7 @@ fi
 
 # Initialize progress file if it doesn't exist
 if [ ! -f "$PROGRESS_FILE" ]; then
-  echo "# Ralph Progress Log" > "$PROGRESS_FILE"
+  echo "# Forge Progress Log" > "$PROGRESS_FILE"
   echo "Started: $(date)" >> "$PROGRESS_FILE"
   echo "---" >> "$PROGRESS_FILE"
 fi
@@ -180,13 +180,13 @@ finalize() {
 
   local pr_title pr_body
   if [ "$status" = "complete" ]; then
-    pr_title="ralph: all stories complete"
+    pr_title="forge: all stories complete"
     pr_body="All user stories in prd.json have been implemented and pass quality checks.
 
 See \`progress.txt\` for iteration-by-iteration details."
   else
-    pr_title="ralph: partial progress (max iterations reached)"
-    pr_body="Ralph reached max iterations before all stories were complete.
+    pr_title="forge: partial progress (max iterations reached)"
+    pr_body="Forge reached max iterations before all stories were complete.
 
 Check \`prd.json\` for story status and \`progress.txt\` for details on what was accomplished and any blockers."
   fi
@@ -208,13 +208,28 @@ Check \`prd.json\` for story status and \`progress.txt\` for details on what was
 }
 # === END: AUTO-PUSH+PR ===
 
-echo "Starting Ralph - Max iterations: $MAX_ITERATIONS"
+echo "Starting Forge - Max iterations: $MAX_ITERATIONS"
 
 for i in $(seq 1 "$MAX_ITERATIONS"); do
   echo ""
   echo "═══════════════════════════════════════════════════════"
-  echo "  Ralph Iteration $i of $MAX_ITERATIONS"
+  echo "  Forge Iteration $i of $MAX_ITERATIONS"
   echo "═══════════════════════════════════════════════════════"
+
+  # DRY_RUN=1: print the assembled prompt and exit without calling the agent.
+  # Verifies wiring (prd.json, prompt file, preflight) without burning tokens.
+  if [ -n "${DRY_RUN:-}" ]; then
+    echo ""
+    echo "=== DRY_RUN: assembled prompt ==="
+    if [ -f "$PROMPT_FILE" ]; then
+      cat "$PROMPT_FILE"
+    else
+      echo "(prompt file not found at $PROMPT_FILE)"
+    fi
+    echo ""
+    echo "=== DRY_RUN: skipping agent call; exiting after iteration $i ==="
+    exit 0
+  fi
 
   # === AGENT COMMAND (replaced during generation) ===
   # Claude Code:    claude -p "$(cat "$PROMPT_FILE")" --dangerously-skip-permissions --model MODEL
@@ -238,7 +253,7 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
 
   if echo "$OUTPUT" | grep -q "<promise>COMPLETE</promise>"; then
     echo ""
-    echo "Ralph completed all tasks!"
+    echo "Forge completed all tasks!"
     echo "Completed at iteration $i of $MAX_ITERATIONS"
     if [ "$AUTO_PUSH_PR" = "true" ]; then
       finalize "complete"
@@ -251,7 +266,7 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
 done
 
 echo ""
-echo "Ralph reached max iterations ($MAX_ITERATIONS) without completing all tasks."
+echo "Forge reached max iterations ($MAX_ITERATIONS) without completing all tasks."
 echo "Check $PROGRESS_FILE for status."
 if [ "$AUTO_PUSH_PR" = "true" ]; then
   finalize "partial"
