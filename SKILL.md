@@ -1,6 +1,6 @@
 ---
 name: forge
-description: "Agent-agnostic, platform-agnostic autonomous loop creator. Generates portable external bash loops that drive any headless coding-agent CLI (claude, droid, codex, opencode, gemini, copilot, …) across fresh-context iterations. Forward mode implements features end-to-end; decompose mode breaks existing features into atomic user stories for reimplementation. Works for code, specs, audits, docs, and research alike. Use when asked to '/forge', '/forge decompose', 'use forge', 'forge this', 'decompose a feature', 'reverse ralph', 'use ralph' (legacy), or 'ralph this' (legacy)."
+description: "Agent-agnostic, platform-agnostic autonomous loop creator. Generates portable external bash loops that drive any headless coding-agent CLI (claude, droid, codex, opencode, gemini, copilot, …) across fresh-context iterations. Forward mode implements features end-to-end; decompose mode breaks existing features into atomic user stories for reimplementation; pipeline mode orchestrates multi-phase workflows (bootstrap → loop → wrap-up). Works for code, specs, audits, docs, and research alike. Use when asked to '/forge', '/forge decompose', '/forge pipeline', 'use forge', 'forge this', 'decompose a feature', 'reverse ralph', 'use ralph' (legacy), or 'ralph this' (legacy)."
 ---
 
 # Forge — Agent-Agnostic, Platform-Agnostic Autonomous Loop Creator
@@ -397,6 +397,141 @@ opts in by creating it themselves. Mention it in the post-generation message if 
 project's nature suggests shared content would help (e.g., "If you want output-format
 or policy rules applied to every iteration, drop them in `.ralph/_shared/*.md`").
 
-**Per-loop shared content** (different shared rules per loop) is not supported in
-forward/decompose modes — use one consolidated `_shared/` for the project, or wait for
-pipeline mode (PR 3) which introduces per-pipeline `_shared/` directories.
+**Per-loop shared content** (different shared rules per loop) is supported in pipeline
+mode via per-pipeline `.ralph/<pipeline-name>/_shared/` directories. For forward and
+decompose modes, use one consolidated `.ralph/_shared/` for the project.
+
+## Pipeline Mode
+
+Triggered by: `/forge pipeline <brief-path-or-description>` or natural language like
+"build a pipeline for X", "set up a multi-phase workflow".
+
+### What it does
+
+Pipeline mode generates a multi-phase driver script that orchestrates a sequence of
+phases sandwiching a loop:
+
+```
+bootstrap (1+ one-shot phases)
+  → loop (1+ phases, each iterates a markdown-checklist queue)
+    → wrap-up (1+ one-shot phases: aggregate, audit, freeze)
+```
+
+Each phase commits to git independently. State lives on disk. Loop phases use fresh
+agent context per iteration. Wrap-up phases assume all upstream loops have drained
+their queues — if a loop hits `max_iters` without finishing, downstream wrap-ups
+are skipped and the user re-runs with `START_AT=<that-phase>` to resume.
+
+Use pipelines when the workflow has setup/teardown around the loop, or when the
+output is something other than code commits (specs, audits, docs, research syntheses).
+
+### Inputs accepted
+
+- A markdown brief (e.g., `/forge pipeline @brief.md`)
+- A natural-language description ("set up a pipeline to audit Product X against SOC 2")
+- Local file paths the brief references
+
+### Agent workflow
+
+Follow the detailed instructions in `scripts/pipeline-init-prompt.md`. The orchestrating
+agent:
+
+1. Reads the brief, extracts goal/inputs/output kind.
+2. Asks for pipeline name, agent, and model.
+3. Designs a 2–6-phase shape (bootstrap → loop → wrap-up), confirms with user.
+4. Generates `.ralph/<pipeline-name>/` with `pipeline.json`, `phases/`, `queues/`,
+   optional `_shared/`.
+5. Generates `.ralph/<pipeline-name>.sh` from `scripts/pipeline.sh`, substituting
+   `__AGENT__`, `__MODEL__`, `__PIPELINE_NAME__`.
+
+### `pipeline.json` schema
+
+```json
+{
+  "name": "my-pipeline",
+  "phases": [
+    {
+      "id": "p01",
+      "type": "oneshot",
+      "prompt": "phases/p01-bootstrap.md",
+      "commit": "bootstrap: setup workspace"
+    },
+    {
+      "id": "p02",
+      "type": "loop",
+      "prompt": "phases/p02-loop.md",
+      "queue": "queues/work.md",
+      "commit_prefix": "iter",
+      "max_iters": 200
+    },
+    {
+      "id": "p03",
+      "type": "oneshot",
+      "prompt": "phases/p03-wrapup.md",
+      "commit": "wrap-up: aggregate"
+    }
+  ]
+}
+```
+
+- `id` must be unique within the pipeline.
+- `type` is `oneshot` or `loop`. (Shell-type phases for pre-fetch land in PR 4.)
+- `prompt` and `queue` paths are relative to `.ralph/<pipeline-name>/`.
+- `commit` (oneshot) and `commit_prefix` (loop) become git commit messages.
+- `max_iters` per phase is optional; falls back to the driver's arg or 200.
+
+### Markdown-checklist queue
+
+Loop phases iterate a markdown checklist:
+
+```markdown
+- [ ] first pending item
+- [ ] second pending item
+- [x] completed item
+```
+
+Each iteration: driver picks the first `- [ ]` line, invokes the agent. The agent
+must flip the line to `- [x]` as its last write. Driver re-checks the queue.
+
+### Phase prompt templates
+
+Default templates live in `scripts/phases/`:
+- `bootstrap-prompt.md` — oneshot bootstrap pattern
+- `loop-prompt-markdown-queue.md` — loop iteration with markdown queue (includes the
+  "you are ONE iteration" framing — keep that verbatim)
+- `wrapup-prompt.md` — oneshot wrap-up pattern
+
+The orchestrating agent copies these to `.ralph/<pipeline-name>/phases/` and edits the
+"Your task this phase/iteration" section for the specific pipeline.
+
+### Runtime layout
+
+```
+project/
+  .ralph/
+    <pipeline-name>.sh             # generated driver
+    <pipeline-name>/
+      pipeline.json                # manifest
+      _shared/*.md                 # (optional) prepended to every phase prompt
+      phases/*.md                  # per-phase prompts
+      queues/*.md                  # markdown-checklist queues for loop phases
+```
+
+### Env flags
+
+- `DRY_RUN=1` — prints assembled prompts and queue contents for every phase that
+  would run; no agent calls, no commits, exits 0.
+- `START_AT=<phase-id>` — skip phases before this one. Used to resume after
+  interruption or after iterating on later phases.
+
+### Files Reference
+
+| File | Purpose |
+|------|---------|
+| `scripts/pipeline.sh` | Reference driver template (substituted at generation time) |
+| `scripts/pipeline-init-prompt.md` | Orchestrating prompt for `/forge pipeline @brief.md` |
+| `scripts/phases/bootstrap-prompt.md` | Default oneshot bootstrap template |
+| `scripts/phases/loop-prompt-markdown-queue.md` | Default loop-iteration template |
+| `scripts/phases/wrapup-prompt.md` | Default oneshot wrap-up template |
+| `.ralph/<name>/pipeline.json` | Generated manifest |
+| `.ralph/<name>.sh` | Generated driver script |

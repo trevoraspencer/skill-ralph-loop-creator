@@ -54,7 +54,13 @@ TMP12="$(mktemp -d)"
 TMP13="$(mktemp -d)"
 TMP14="$(mktemp -d)"
 TMP15="$(mktemp -d)"
-trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9" "$TMP10" "$TMP11" "$TMP12" "$TMP13" "$TMP14" "$TMP15"' EXIT
+TMP16="$(mktemp -d)"
+TMP17="$(mktemp -d)"
+TMP18="$(mktemp -d)"
+TMP19="$(mktemp -d)"
+TMP20="$(mktemp -d)"
+TMP21="$(mktemp -d)"
+trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9" "$TMP10" "$TMP11" "$TMP12" "$TMP13" "$TMP14" "$TMP15" "$TMP16" "$TMP17" "$TMP18" "$TMP19" "$TMP20" "$TMP21"' EXIT
 
 # Test 1: successful completion when agent emits COMPLETE marker.
 mkdir -p "$TMP1/.ralph"
@@ -521,3 +527,229 @@ echo "  Test 15 passed: decompose shared-includes prepended in order"
 
 echo ""
 echo "All shared-includes smoke tests passed."
+
+# ═══════════════════════════════════════════════════════
+# Pipeline mode smoke tests
+# ═══════════════════════════════════════════════════════
+
+PIPELINE_TEMPLATE="$ROOT_DIR/scripts/pipeline.sh"
+
+render_pipeline_script() {
+  local out_file="$1"
+  local agent="$2"
+  local model="$3"
+  local pipeline_name="$4"
+
+  sed \
+    -e "s|__AGENT__|${agent}|g" \
+    -e "s|__MODEL__|${model}|g" \
+    -e "s|__PIPELINE_NAME__|${pipeline_name}|g" \
+    "$PIPELINE_TEMPLATE" > "$out_file"
+  chmod +x "$out_file"
+}
+
+# Set up a git repo in a tmp dir (needed for git_checkpoint in real-run tests).
+# Disables commit signing — some CI/sandbox envs require external signing servers
+# that aren't reachable from tests, and pipeline tests need to actually commit.
+init_git_repo() {
+  local dir="$1"
+  git -C "$dir" init -q
+  git -C "$dir" config user.email "test@example.com"
+  git -C "$dir" config user.name "Test"
+  git -C "$dir" config commit.gpgsign false
+  git -C "$dir" config tag.gpgsign false
+  git -C "$dir" config gpg.format ""
+  # Create initial commit so HEAD exists
+  echo "init" > "$dir/.init"
+  git -C "$dir" add -A
+  git -C "$dir" -c commit.gpgsign=false -c gpg.format= commit -q --no-gpg-sign -m "init"
+}
+
+echo ""
+echo "Running pipeline mode smoke tests..."
+
+# Test 16: pipeline DRY_RUN over 3-phase pipeline (oneshot, loop, oneshot)
+mkdir -p "$TMP16/.ralph/demo/phases" "$TMP16/.ralph/demo/queues"
+render_pipeline_script "$TMP16/.ralph/demo.sh" "custom" "" "demo"
+cat > "$TMP16/.ralph/demo/pipeline.json" <<'JSON'
+{
+  "name": "demo",
+  "phases": [
+    { "id": "p01", "type": "oneshot", "prompt": "phases/p01.md", "commit": "p01" },
+    { "id": "p02", "type": "loop",    "prompt": "phases/p02.md", "queue": "queues/work.md", "commit_prefix": "iter" },
+    { "id": "p03", "type": "oneshot", "prompt": "phases/p03.md", "commit": "p03" }
+  ]
+}
+JSON
+cat > "$TMP16/.ralph/demo/phases/p01.md" <<'PROMPT'
+PHASE_P01_BOOTSTRAP_BODY
+PROMPT
+cat > "$TMP16/.ralph/demo/phases/p02.md" <<'PROMPT'
+PHASE_P02_LOOP_BODY
+PROMPT
+cat > "$TMP16/.ralph/demo/phases/p03.md" <<'PROMPT'
+PHASE_P03_WRAPUP_BODY
+PROMPT
+cat > "$TMP16/.ralph/demo/queues/work.md" <<'Q'
+- [ ] queue-item-alpha
+- [ ] queue-item-beta
+Q
+
+if ! (cd "$TMP16" && DRY_RUN=1 CUSTOM_CMD='echo "AGENT_SHOULD_NOT_RUN_IN_PIPELINE_DRY_RUN"' ./.ralph/demo.sh 1 >"$TMP16/out.txt" 2>&1); then
+  echo "FAIL: pipeline DRY_RUN should exit 0"
+  cat "$TMP16/out.txt"
+  exit 1
+fi
+assert_contains "$TMP16/out.txt" "PHASE_P01_BOOTSTRAP_BODY" "pipeline DRY_RUN: p01 prompt printed"
+assert_contains "$TMP16/out.txt" "PHASE_P02_LOOP_BODY" "pipeline DRY_RUN: p02 prompt printed"
+assert_contains "$TMP16/out.txt" "PHASE_P03_WRAPUP_BODY" "pipeline DRY_RUN: p03 prompt printed"
+assert_contains "$TMP16/out.txt" "queue-item-alpha" "pipeline DRY_RUN: queue contents printed"
+if grep -q "AGENT_SHOULD_NOT_RUN_IN_PIPELINE_DRY_RUN" "$TMP16/out.txt"; then
+  echo "FAIL: agent must not run under DRY_RUN"
+  cat "$TMP16/out.txt"
+  exit 1
+fi
+echo "  Test 16 passed: pipeline DRY_RUN over 3-phase pipeline"
+
+# Test 17: START_AT skips earlier phases
+mkdir -p "$TMP17/.ralph/demo/phases" "$TMP17/.ralph/demo/queues"
+render_pipeline_script "$TMP17/.ralph/demo.sh" "custom" "" "demo"
+cat > "$TMP17/.ralph/demo/pipeline.json" <<'JSON'
+{
+  "name": "demo",
+  "phases": [
+    { "id": "p01", "type": "oneshot", "prompt": "phases/p01.md", "commit": "p01" },
+    { "id": "p02", "type": "oneshot", "prompt": "phases/p02.md", "commit": "p02" },
+    { "id": "p03", "type": "oneshot", "prompt": "phases/p03.md", "commit": "p03" }
+  ]
+}
+JSON
+cat > "$TMP17/.ralph/demo/phases/p01.md" <<'PROMPT'
+P01_SHOULD_BE_SKIPPED
+PROMPT
+cat > "$TMP17/.ralph/demo/phases/p02.md" <<'PROMPT'
+P02_SHOULD_RUN
+PROMPT
+cat > "$TMP17/.ralph/demo/phases/p03.md" <<'PROMPT'
+P03_SHOULD_RUN
+PROMPT
+
+if ! (cd "$TMP17" && DRY_RUN=1 START_AT=p02 CUSTOM_CMD='echo "noop"' ./.ralph/demo.sh 1 >"$TMP17/out.txt" 2>&1); then
+  echo "FAIL: pipeline START_AT should exit 0"
+  cat "$TMP17/out.txt"
+  exit 1
+fi
+assert_contains "$TMP17/out.txt" "skip p01" "pipeline START_AT: p01 skipped"
+assert_contains "$TMP17/out.txt" "P02_SHOULD_RUN" "pipeline START_AT: p02 ran"
+assert_contains "$TMP17/out.txt" "P03_SHOULD_RUN" "pipeline START_AT: p03 ran"
+if grep -q "P01_SHOULD_BE_SKIPPED" "$TMP17/out.txt"; then
+  echo "FAIL: p01 should not have been printed"
+  cat "$TMP17/out.txt"
+  exit 1
+fi
+echo "  Test 17 passed: pipeline START_AT skips earlier phases"
+
+# Test 18: missing pipeline.json fails preflight with clear error
+mkdir -p "$TMP18/.ralph/demo"
+render_pipeline_script "$TMP18/.ralph/demo.sh" "custom" "" "demo"
+# Do NOT create pipeline.json
+
+if (cd "$TMP18" && CUSTOM_CMD='echo "noop"' ./.ralph/demo.sh 1 >"$TMP18/out.txt" 2>&1); then
+  echo "FAIL: missing pipeline.json should fail"
+  cat "$TMP18/out.txt"
+  exit 1
+fi
+assert_contains "$TMP18/out.txt" "pipeline.json" "pipeline preflight: missing pipeline.json"
+echo "  Test 18 passed: missing pipeline.json fails preflight"
+
+# Test 19: invalid pipeline.json schema fails preflight
+mkdir -p "$TMP19/.ralph/demo/phases"
+render_pipeline_script "$TMP19/.ralph/demo.sh" "custom" "" "demo"
+cat > "$TMP19/.ralph/demo/pipeline.json" <<'JSON'
+{ "name": "demo", "phases": "this-should-be-an-array" }
+JSON
+
+if (cd "$TMP19" && CUSTOM_CMD='echo "noop"' ./.ralph/demo.sh 1 >"$TMP19/out.txt" 2>&1); then
+  echo "FAIL: invalid pipeline.json should fail"
+  cat "$TMP19/out.txt"
+  exit 1
+fi
+assert_contains "$TMP19/out.txt" "invalid schema" "pipeline preflight: invalid schema"
+echo "  Test 19 passed: invalid pipeline.json schema fails preflight"
+
+# Test 20: loop phase hitting max_iters with non-empty queue exits 0 AND skips downstream wrap-up
+# Real run (not DRY_RUN): need a git repo for git_checkpoint, and a mock agent that does NOT flip checkboxes
+mkdir -p "$TMP20/.ralph/demo/phases" "$TMP20/.ralph/demo/queues"
+init_git_repo "$TMP20"
+render_pipeline_script "$TMP20/.ralph/demo.sh" "custom" "" "demo"
+cat > "$TMP20/.ralph/demo/pipeline.json" <<'JSON'
+{
+  "name": "demo",
+  "phases": [
+    { "id": "p01", "type": "loop",    "prompt": "phases/p01.md", "queue": "queues/work.md", "commit_prefix": "iter" },
+    { "id": "p02", "type": "oneshot", "prompt": "phases/p02.md", "commit": "wrap" }
+  ]
+}
+JSON
+cat > "$TMP20/.ralph/demo/phases/p01.md" <<'PROMPT'
+loop-prompt
+PROMPT
+cat > "$TMP20/.ralph/demo/phases/p02.md" <<'PROMPT'
+WRAPUP_SHOULD_NOT_RUN
+PROMPT
+cat > "$TMP20/.ralph/demo/queues/work.md" <<'Q'
+- [ ] item-one
+- [ ] item-two
+Q
+
+# max_iters=1 from CLI arg. Mock agent echoes but does not flip checkbox.
+if ! (cd "$TMP20" && CUSTOM_CMD='echo "mock-agent-noop"' ./.ralph/demo.sh 1 >"$TMP20/out.txt" 2>&1); then
+  echo "FAIL: pipeline hit-max-iters should exit 0"
+  cat "$TMP20/out.txt"
+  exit 1
+fi
+assert_contains "$TMP20/out.txt" "Phase p01 hit max_iters" "pipeline: loop max_iters detected"
+assert_contains "$TMP20/out.txt" "Downstream phases skipped" "pipeline: wrap-up skip warning shown"
+if grep -q "WRAPUP_SHOULD_NOT_RUN" "$TMP20/out.txt"; then
+  echo "FAIL: wrap-up phase must not run when loop is incomplete"
+  cat "$TMP20/out.txt"
+  exit 1
+fi
+echo "  Test 20 passed: incomplete loop skips downstream wrap-up phase"
+
+# Test 21: shared-includes in pipeline phases (.ralph/<name>/_shared/*.md prepended)
+mkdir -p "$TMP21/.ralph/demo/phases" "$TMP21/.ralph/demo/queues" "$TMP21/.ralph/demo/_shared"
+render_pipeline_script "$TMP21/.ralph/demo.sh" "custom" "" "demo"
+cat > "$TMP21/.ralph/demo/pipeline.json" <<'JSON'
+{
+  "name": "demo",
+  "phases": [
+    { "id": "p01", "type": "oneshot", "prompt": "phases/p01.md", "commit": "p01" }
+  ]
+}
+JSON
+cat > "$TMP21/.ralph/demo/phases/p01.md" <<'PROMPT'
+BASE_PHASE_PROMPT_BODY
+PROMPT
+cat > "$TMP21/.ralph/demo/_shared/01-policy.md" <<'PROMPT'
+PIPELINE_SHARED_POLICY_LINE
+PROMPT
+
+if ! (cd "$TMP21" && DRY_RUN=1 CUSTOM_CMD='echo "noop"' ./.ralph/demo.sh 1 >"$TMP21/out.txt" 2>&1); then
+  echo "FAIL: pipeline shared-includes DRY_RUN should exit 0"
+  cat "$TMP21/out.txt"
+  exit 1
+fi
+assert_contains "$TMP21/out.txt" "PIPELINE_SHARED_POLICY_LINE" "pipeline shared: _shared content prepended"
+assert_contains "$TMP21/out.txt" "BASE_PHASE_PROMPT_BODY" "pipeline shared: base prompt still present"
+shared_line=$(grep -n "PIPELINE_SHARED_POLICY_LINE" "$TMP21/out.txt" | head -1 | cut -d: -f1)
+base_line=$(grep -n "BASE_PHASE_PROMPT_BODY" "$TMP21/out.txt" | head -1 | cut -d: -f1)
+if [ -z "$shared_line" ] || [ -z "$base_line" ] || [ "$shared_line" -ge "$base_line" ]; then
+  echo "FAIL: pipeline shared content must appear before base prompt"
+  cat "$TMP21/out.txt"
+  exit 1
+fi
+echo "  Test 21 passed: pipeline shared-includes prepend per-phase"
+
+echo ""
+echo "All pipeline mode smoke tests passed."

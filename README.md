@@ -154,6 +154,40 @@ If `.ralph/_shared/` does not exist, behavior is unchanged from v1 (no-op). The 
 
 Combine with `DRY_RUN=1` to verify the assembled prompt reads as expected before paying for a real run.
 
+### Pipeline mode — multi-phase workflows (bootstrap → loop → wrap-up)
+
+For workflows that need setup and finalization around the loop — or that produce specs, audits, docs, or research rather than code — use pipeline mode:
+
+```text
+/forge pipeline @brief.md
+```
+
+This generates a multi-phase driver. Each phase is either `oneshot` (run once, commit) or `loop` (iterate a markdown-checklist queue until empty). Pipelines have their own `pipeline.json` manifest and per-phase prompt files under `.ralph/<pipeline-name>/`.
+
+```text
+project/
+  .ralph/
+    my-pipeline.sh                 # generated driver
+    my-pipeline/
+      pipeline.json
+      _shared/*.md                 # (optional) per-pipeline shared content
+      phases/
+        p01-bootstrap.md           # oneshot
+        p02-loop.md                # loop
+        p03-wrapup.md              # oneshot
+      queues/
+        work.md                    # markdown checklist for p02
+```
+
+Pipeline-specific env flags:
+
+- `DRY_RUN=1 .ralph/<name>.sh` — print every phase's assembled prompt + queue contents; no agent calls.
+- `START_AT=<phase-id> .ralph/<name>.sh` — skip earlier phases (resume after interruption).
+
+If a loop phase hits `max_iters` without draining its queue, downstream wrap-up phases are skipped (they assume the loop is complete). Re-run with `START_AT=<that-phase-id>` to resume.
+
+Pipeline mode uses the markdown-checklist queue convention — the agent prompt instructs it to flip the line it processed from `- [ ]` to `- [x]` as its last write. See `scripts/phases/loop-prompt-markdown-queue.md` for the loop-iteration template.
+
 ## Supported Execution Agents
 
 | Agent | Binary | Headless command template |
@@ -193,6 +227,9 @@ The `.ralph/` runtime directory name is preserved from v1 for backward compatibi
 - `scripts/decompose.sh`: decompose loop template used when generating `.ralph/decompose-<n>.sh`
 - `scripts/decompose-prompt.md`: per-iteration decompose prompt copied to `.ralph/decompose-<n>-prompt.md`
 - `scripts/decompose-init-prompt.md`: initialization prompt used by the orchestrating agent during decompose setup
+- `scripts/pipeline.sh`: reference multi-phase pipeline driver (substituted at generation time)
+- `scripts/pipeline-init-prompt.md`: orchestrating prompt for `/forge pipeline @brief.md`
+- `scripts/phases/`: default phase prompt templates (`bootstrap-prompt.md`, `loop-prompt-markdown-queue.md`, `wrapup-prompt.md`)
 - `scripts/test-template.sh`: smoke tests for template preflight + completion behavior
 
 ## Development Check
