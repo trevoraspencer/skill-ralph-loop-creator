@@ -196,6 +196,12 @@ Pipeline mode uses the markdown-checklist queue convention — the agent prompt 
 
 **Opt-in provenance + taint guardrails:** for pipelines that decompose or audit external things (third-party products, vendor compliance, legal docs), drop `scripts/phases/provenance-rules.md` and `scripts/phases/forbidden-paths.md` into the pipeline's `_shared/` to enforce source-citation on every claim and a "do not read X" protocol. Add `scripts/phases/red-team-wrapup.md` as the last phase to audit citations and verify the taint log. See [SKILL.md](SKILL.md#opt-in-provenance-and-taint-guardrails) for details.
 
+**Example briefs:** see [`examples/briefs/`](examples/briefs/) for ready-to-copy pipeline briefs covering the main shapes:
+
+- [`decompose-public-product.md`](examples/briefs/decompose-public-product.md) — build a behavioral spec corpus for a third-party product from public sources, with provenance + taint guardrails
+- [`audit-vendor-compliance.md`](examples/briefs/audit-vendor-compliance.md) — audit a vendor against a compliance framework, one control per loop iteration
+- [`generate-reference-docs.md`](examples/briefs/generate-reference-docs.md) — generate reference documentation from source, with a link-check shell phase as the wrap-up
+
 ## Supported Execution Agents
 
 | Agent | Binary | Headless command template |
