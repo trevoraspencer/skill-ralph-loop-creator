@@ -6,7 +6,7 @@
 
 h/t [Geoffrey Huntley](https://ghuntley.com/ralph/) and [Ben Tossell](https://github.com/factory-ben/ralph) for the original Ralph pattern.
 
-> **Renamed from Ralph.** The v1 invocation `/ralph` is renamed to `/forge`. Existing `.ralph/*.sh` generated scripts continue to work unchanged — only the slash command and the skill `name:` field change. See [Migration from Ralph](#migration-from-ralph) below.
+> **v2.0.0 released 2026-05-24.** See [CHANGELOG.md](CHANGELOG.md) for the full set of changes. `/ralph` was renamed to `/forge`; existing `.ralph/*.sh` generated scripts continue to run unchanged. See [Migration from Ralph](#migration-from-ralph) below.
 
 ## What It Does
 
@@ -27,7 +27,7 @@ If you only need a **single in-session loop with one agent**, use that agent's n
 
 If you want **methodology guidance** — brainstorming, planning, TDD, code review — use a methodology-focused plugin for your platform — e.g., Anthropic's [Superpowers plugin](https://claude.com/plugins/superpowers) for Claude Code.
 
-Forge is **complementary to both**: it generates **external** bash loops, **across many fresh-context iterations**, for **any CLI**, with optional **multi-phase pipeline orchestration** (coming soon). Use whichever combination fits the task.
+Forge is **complementary to both**: it generates **external** bash loops, **across many fresh-context iterations**, for **any CLI**, with optional **multi-phase pipeline orchestration** (`/forge pipeline @brief.md`). Use whichever combination fits the task.
 
 ## Requirements
 
