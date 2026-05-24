@@ -259,12 +259,14 @@ CI runs the same smoke tests on every push and pull request via GitHub Actions
 
 ## Troubleshooting
 
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for a more detailed catalog of failure modes (the prompt isn't what I expected, the loop runs forever, max_iters hit with non-empty queue, where state lives, commit-signing in CI, etc.). Quick hits:
+
 - `/forge` is not available: verify install path and folder name (`forge`), then restart your CLI session.
-- `/ralph` no longer routes here after upgrading: that's expected — the slash command was renamed to `/forge`. Natural-language triggers like "use ralph to …" still work.
+- `/ralph` no longer routes here after upgrading: expected — slash command renamed to `/forge`. Natural-language triggers like "use ralph to …" still work.
 - Loop script exits with jq error: install `jq` (`brew install jq` on macOS).
 - Execution agent command not found: install/authenticate the selected agent CLI and retry.
 - Auto-push/PR does nothing: ensure you are on a non-default branch with commits; install/authenticate `gh` for PR creation.
-- Want to test wiring without paying for tokens: run with `DRY_RUN=1 .ralph/<loop-name>.sh` — it prints the assembled prompt and exits without calling the agent.
+- Want to test wiring without paying for tokens: `DRY_RUN=1 .ralph/<loop-name>.sh` prints the assembled prompt and exits without calling the agent.
 
 ## License
 
