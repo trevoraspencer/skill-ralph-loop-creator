@@ -87,12 +87,20 @@ while [ "$iter" -lt "$MAX_ITERS" ]; do
     exit 1
   fi
 
-  # Build the iteration prompt: base template + current decomp.json state
+  # Build the iteration prompt: optional shared includes + base template + current decomp.json state.
   # NOTE: The full decomp.json is appended to each prompt. For very large feature
   # decompositions (hundreds of nodes), this may approach agent context limits.
   # If that happens, increase max_iterations and let the loop resume across runs.
   ITER_PROMPT_FILE="$(mktemp /tmp/ralph-decompose-iter-XXXXXX.md)"
-  sed "s|__NEXT_NODE_ID__|${NEXT_NODE}|g" "$PROMPT_FILE" > "$ITER_PROMPT_FILE"
+  SHARED_DIR="$SCRIPT_DIR/_shared"
+  # Shared-includes: prepend any *.md files in .ralph/_shared/ (alphabetical).
+  # If the directory does not exist, no shared content is added (no-op, BC).
+  if compgen -G "$SHARED_DIR/*.md" >/dev/null 2>&1; then
+    cat "$SHARED_DIR"/*.md > "$ITER_PROMPT_FILE"
+    sed "s|__NEXT_NODE_ID__|${NEXT_NODE}|g" "$PROMPT_FILE" >> "$ITER_PROMPT_FILE"
+  else
+    sed "s|__NEXT_NODE_ID__|${NEXT_NODE}|g" "$PROMPT_FILE" > "$ITER_PROMPT_FILE"
+  fi
   printf '\n## Current decomp.json\n```json\n' >> "$ITER_PROMPT_FILE"
   cat "$DECOMP_FILE" >> "$ITER_PROMPT_FILE"
   printf '\n```\n' >> "$ITER_PROMPT_FILE"

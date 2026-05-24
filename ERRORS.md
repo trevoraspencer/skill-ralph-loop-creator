@@ -35,6 +35,34 @@ iterate over a queue of stories/nodes, not phases. Adding `START_AT` with bolted
 demand. Deferred to PR 3 where it lands alongside the multi-phase pipeline driver
 and has a natural fit.
 
+### Added: shared-includes (`.ralph/_shared/*.md`)
+
+Any `.md` files in `.ralph/_shared/` are concatenated alphabetically and prepended
+to the per-iteration prompt for every forward and decompose loop in the project.
+If the directory does not exist, scripts behave exactly as before (no-op, BC).
+
+Implementation details:
+
+- `scripts/ralph.sh` adds a `build_iter_prompt()` helper called at the top of each
+  iteration. If `_shared/*.md` files exist, it concatenates them with the base prompt
+  into a temp file and reassigns `PROMPT_FILE` to point at the temp. If no shared
+  content exists, `PROMPT_FILE` stays pointed at the original base prompt (no temp
+  file, no behavior change). A cleanup trap removes the temp file on exit.
+- `scripts/decompose.sh` extends the existing `ITER_PROMPT_FILE` assembly to write
+  shared content first, then append the sed-substituted per-iteration prompt and
+  decomp.json. The existing cleanup trap handles temp file removal.
+
+Three new smoke tests in `scripts/test-template.sh`:
+
+- Test 13: forward with `_shared/` — asserts content prepended in alphabetical order.
+- Test 14: forward without `_shared/` — asserts BC (base prompt unchanged).
+- Test 15: decompose with `_shared/` — asserts content prepended before per-iteration
+  prompt and decomp.json state.
+
+**Scope deferred to pipeline mode (PR 3):** per-loop shared content (different shared
+rules per loop). For v1 modes, one consolidated project-wide `_shared/` is sufficient
+for the common case.
+
 ## Critical (fixed)
 
 ### 1. Decompose `prd.json` output was incompatible with forward Ralph

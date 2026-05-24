@@ -136,6 +136,24 @@ DRY_RUN=1 .ralph/decompose-<n>.sh
 
 `DRY_RUN=1` runs all preflight checks, prints the assembled prompt for the first iteration to stdout, and exits 0 without calling the agent. Useful for confirming that `prd.json` parses, the agent binary is on `PATH`, the prompt file is present, and the prompt content reads as you'd expect.
 
+### Shared-includes — apply the same content to every iteration
+
+Drop `.md` files in `.ralph/_shared/` and they will be concatenated (alphabetical order) and prepended to every iteration's prompt — for every forward and decompose loop in the project. Useful for project-wide policy, output schemas, glossary, evidence/source-citation rules, or anything else you want every iteration to see.
+
+```text
+project/
+  .ralph/
+    _shared/
+      01-policy.md         # prepended first to every iteration
+      02-output-format.md  # prepended second
+    my-loop.sh
+    my-loop-prompt.md
+```
+
+If `.ralph/_shared/` does not exist, behavior is unchanged from v1 (no-op). The user opts in by creating the directory.
+
+Combine with `DRY_RUN=1` to verify the assembled prompt reads as expected before paying for a real run.
+
 ## Supported Execution Agents
 
 | Agent | Binary | Headless command template |

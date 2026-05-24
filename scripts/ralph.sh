@@ -43,6 +43,34 @@ PROMPT_FILE="$SCRIPT_DIR/prompt.md"
 # In generated scripts, this is set to the selected executable (e.g. claude).
 AGENT_BIN="AGENT_BIN_HERE"
 
+# Shared-includes: any markdown files in $SCRIPT_DIR/_shared/ are concatenated
+# (alphabetical order) and prepended to the per-iteration prompt. If the
+# directory does not exist, the script behaves as if no shared content were
+# present (no-op, backward compatible with v1 generated scripts).
+ORIGINAL_PROMPT_FILE="$PROMPT_FILE"
+SHARED_DIR="$SCRIPT_DIR/_shared"
+ITER_PROMPT_FILE=""
+
+cleanup_iter_prompt() {
+  if [ -n "${ITER_PROMPT_FILE:-}" ] && [ -f "$ITER_PROMPT_FILE" ]; then
+    rm -f "$ITER_PROMPT_FILE"
+  fi
+  ITER_PROMPT_FILE=""
+}
+trap cleanup_iter_prompt EXIT INT TERM
+
+build_iter_prompt() {
+  cleanup_iter_prompt
+  if compgen -G "$SHARED_DIR/*.md" >/dev/null 2>&1; then
+    ITER_PROMPT_FILE="$(mktemp /tmp/forge-iter-XXXXXX.md)"
+    cat "$SHARED_DIR"/*.md "$ORIGINAL_PROMPT_FILE" > "$ITER_PROMPT_FILE"
+    PROMPT_FILE="$ITER_PROMPT_FILE"
+  else
+    # No shared content: PROMPT_FILE stays as the base prompt (BC, no temp file).
+    PROMPT_FILE="$ORIGINAL_PROMPT_FILE"
+  fi
+}
+
 if [ ! -f "$PRD_FILE" ]; then
   echo "Error: missing $PRD_FILE. Generate prd.json before running this loop."
   exit 1
@@ -215,6 +243,10 @@ for i in $(seq 1 "$MAX_ITERATIONS"); do
   echo "═══════════════════════════════════════════════════════"
   echo "  Forge Iteration $i of $MAX_ITERATIONS"
   echo "═══════════════════════════════════════════════════════"
+
+  # Assemble the per-iteration prompt (shared includes + base prompt).
+  # PROMPT_FILE is reassigned to point at the assembled temp file.
+  build_iter_prompt
 
   # DRY_RUN=1: print the assembled prompt and exit without calling the agent.
   # Verifies wiring (prd.json, prompt file, preflight) without burning tokens.
