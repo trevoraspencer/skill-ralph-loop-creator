@@ -282,6 +282,19 @@ and `seq` (and likely others if dependencies grow). Switched to allowlisting
 *everything* in `/usr/local/bin`, `/usr/bin`, `/bin` and explicitly removing the
 `gh` symlink. Robust to future tooling additions in the scripts.
 
+### Added: CHANGELOG.md and v2.0.0 release tag
+
+The v2 changelog above is implementation-flavored (per-PR rationale, test
+numbers, scoping notes). `CHANGELOG.md` is the user-facing complement:
+Keep-a-Changelog format, grouped by Added/Changed/Fixed, no test numbers or
+internal scoping notes. README header now links to it and points at v2.0.0
+explicitly. README's stale "multi-phase pipeline orchestration (coming soon)"
+note was corrected — pipeline mode shipped in v2.
+
+v2.0.0 annotated tag created on the merge commit after this PR lands, with a
+release notes summary derived from the new `CHANGELOG.md`. ERRORS.md remains
+the dev-facing log; CHANGELOG.md is what external users read.
+
 ### Added: example briefs (`examples/briefs/`)
 
 Three concrete pipeline briefs users can copy and feed to `/forge pipeline`:
