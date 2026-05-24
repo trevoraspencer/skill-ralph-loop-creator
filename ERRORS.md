@@ -164,6 +164,46 @@ Four new smoke tests in `scripts/test-template.sh`:
 network or GitHub auth. They'll be exercised when the prefetcher is used in real
 pipelines.
 
+### Added: provenance + taint guardrail templates (opt-in)
+
+Four new opt-in templates under `scripts/phases/` for pipelines that derive output
+from external sources where citations matter (specs, audits, research syntheses,
+anything decomposing or auditing a third party):
+
+- `provenance-bootstrap.md` — bootstrap-type oneshot that initializes
+  `provenance-index.md` (skeleton table mapping local paths → source URLs → fetch
+  dates) and `risk-and-taint-log.md` (empty append-only log).
+- `provenance-rules.md` — drops in `.ralph/<pipeline-name>/_shared/`. Enforces
+  "every non-obvious claim cites at least one corpus file" on every phase via the
+  shared-includes mechanism shipped in PR 2.
+- `forbidden-paths.md` — drops in `.ralph/<pipeline-name>/_shared/`. Declares the
+  forbidden source classes for the pipeline (e.g., `src/proprietary/**`, secrets,
+  privileged docs). If an iteration accidentally touches a forbidden path, it logs
+  the incident to the taint log, discards what was absorbed, and continues. The
+  pipeline doesn't auto-fail on a non-empty taint log — the red-team wrap-up
+  surfaces each incident for human review.
+- `red-team-wrapup.md` — wrap-up oneshot that audits citations (every claim cited,
+  every cited file in the index, every index entry exists on disk, every citation
+  supports its claim), reviews the taint log, scans for contamination by pattern,
+  and writes `red-team-report.md`.
+
+No driver changes. No `pipeline.json` schema changes. Everything composes via the
+existing shared-includes mechanism (PR 2) and ordinary oneshot/wrap-up phases.
+
+**Scoping note:** the original plan also listed `output_kind` (code/spec/audit/docs/
+research per-kind defaults) as a possible future PR. Skipped as a premature
+abstraction — users compose specific templates (like the four above) instead of
+selecting from a closed enum of "kinds." If a clear pattern emerges from real-world
+use of these templates, an `output_kind` field can be added later without breaking
+anything.
+
+**Scoping note (PR 5 from original plan):** the "markdown-checklist queue as an
+alternative to JSON state" was subsumed by PR 3, which shipped markdown queue as
+the PRIMARY queue type for pipeline loops. The original framing (JSON primary,
+markdown alternative) became inverted in practice. Existing decompose mode keeps
+its hierarchical JSON state (`decomp.json`) since hierarchy doesn't fit a flat
+checklist anyway.
+
 ## Critical (fixed)
 
 ### 1. Decompose `prd.json` output was incompatible with forward Ralph
