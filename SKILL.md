@@ -586,6 +586,43 @@ project/
 - `START_AT=<phase-id>` — skip phases before this one. Used to resume after
   interruption or after iterating on later phases.
 
+### Opt-in: provenance and taint guardrails
+
+For pipelines that derive output from external sources where citations matter — specs,
+audits, research syntheses, anything making claims about a third party — opt in to
+the provenance and taint guardrails. These are templates (no driver changes); they
+plug into the shared-includes mechanism.
+
+| Template | Where it goes | What it does |
+|----------|--------------|--------------|
+| `scripts/phases/provenance-bootstrap.md` | as a bootstrap-type oneshot phase | initializes `provenance-index.md` + empty `risk-and-taint-log.md` |
+| `scripts/phases/provenance-rules.md` | `.ralph/<name>/_shared/` | enforces "every claim cites a corpus file" on every phase |
+| `scripts/phases/forbidden-paths.md` | `.ralph/<name>/_shared/` | declares forbidden source classes; loop iterations log incidents to the taint log |
+| `scripts/phases/red-team-wrapup.md` | as the LAST oneshot wrap-up phase | audits citations, reviews taint log, scans for contamination, writes `red-team-report.md` |
+
+A typical provenance-aware pipeline:
+
+```json
+{
+  "name": "audit-vendor-x",
+  "phases": [
+    { "id": "p01", "type": "oneshot", "prompt": "phases/p01-bootstrap.md",     "commit": "bootstrap" },
+    { "id": "p02", "type": "oneshot", "prompt": "phases/p02-provenance.md",    "commit": "provenance: init" },
+    { "id": "p03", "type": "shell",   "script": "phases/p03-prefetch.sh",      "commit": "prefetch" },
+    { "id": "p04", "type": "loop",    "prompt": "phases/p04-loop.md",          "queue": "queues/work.md", "commit_prefix": "iter" },
+    { "id": "p05", "type": "oneshot", "prompt": "phases/p05-red-team.md",      "commit": "red-team audit" }
+  ]
+}
+```
+
+With `provenance-rules.md` and `forbidden-paths.md` dropped in `_shared/`, every
+phase prompt receives the rules. The red-team wrap-up reads `provenance-index.md`
+and `risk-and-taint-log.md` to produce its audit report. A non-empty taint log
+does not automatically fail the pipeline — the user reviews each incident.
+
+For pipelines where these don't apply (code-generation workflows that act on
+project-internal source), skip the guardrails entirely.
+
 ### Files Reference
 
 | File | Purpose |
@@ -595,6 +632,10 @@ project/
 | `scripts/phases/bootstrap-prompt.md` | Default oneshot bootstrap template |
 | `scripts/phases/loop-prompt-markdown-queue.md` | Default loop-iteration template |
 | `scripts/phases/wrapup-prompt.md` | Default oneshot wrap-up template |
+| `scripts/phases/provenance-bootstrap.md` | Opt-in: initializes provenance + taint files |
+| `scripts/phases/provenance-rules.md` | Opt-in `_shared/` template: source-citation enforcement |
+| `scripts/phases/forbidden-paths.md` | Opt-in `_shared/` template: forbidden sources + taint protocol |
+| `scripts/phases/red-team-wrapup.md` | Opt-in wrap-up template: audits citations + taint log |
 | `scripts/prefetch.sh` | Reference TSV-driven prefetcher for shell phases |
 | `.ralph/<name>/pipeline.json` | Generated manifest |
 | `.ralph/<name>.sh` | Generated driver script |

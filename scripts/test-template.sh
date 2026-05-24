@@ -64,7 +64,8 @@ TMP22="$(mktemp -d)"
 TMP23="$(mktemp -d)"
 TMP24="$(mktemp -d)"
 TMP25="$(mktemp -d)"
-trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9" "$TMP10" "$TMP11" "$TMP12" "$TMP13" "$TMP14" "$TMP15" "$TMP16" "$TMP17" "$TMP18" "$TMP19" "$TMP20" "$TMP21" "$TMP22" "$TMP23" "$TMP24" "$TMP25"' EXIT
+TMP26="$(mktemp -d)"
+trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9" "$TMP10" "$TMP11" "$TMP12" "$TMP13" "$TMP14" "$TMP15" "$TMP16" "$TMP17" "$TMP18" "$TMP19" "$TMP20" "$TMP21" "$TMP22" "$TMP23" "$TMP24" "$TMP25" "$TMP26"' EXIT
 
 # Test 1: successful completion when agent emits COMPLETE marker.
 mkdir -p "$TMP1/.ralph"
@@ -887,3 +888,64 @@ echo "  Test 25 passed: prefetch.sh handles local_file class"
 
 echo ""
 echo "All shell-phase + prefetcher smoke tests passed."
+
+# ═══════════════════════════════════════════════════════
+# Provenance + taint guardrail template tests
+# ═══════════════════════════════════════════════════════
+
+echo ""
+echo "Running provenance + taint template smoke tests..."
+
+# Test 26: opt-in templates (provenance-rules + forbidden-paths) compose via shared-includes
+# Dropping them in .ralph/<pipeline-name>/_shared/ should prepend to every phase prompt.
+PROVENANCE_TEMPLATE="$ROOT_DIR/scripts/phases/provenance-rules.md"
+FORBIDDEN_TEMPLATE="$ROOT_DIR/scripts/phases/forbidden-paths.md"
+RED_TEAM_TEMPLATE="$ROOT_DIR/scripts/phases/red-team-wrapup.md"
+PROV_BOOTSTRAP_TEMPLATE="$ROOT_DIR/scripts/phases/provenance-bootstrap.md"
+
+# All four opt-in templates must exist
+for t in "$PROVENANCE_TEMPLATE" "$FORBIDDEN_TEMPLATE" "$RED_TEAM_TEMPLATE" "$PROV_BOOTSTRAP_TEMPLATE"; do
+  if [ ! -f "$t" ]; then
+    echo "FAIL: opt-in template missing: $t"
+    exit 1
+  fi
+done
+
+mkdir -p "$TMP26/.ralph/demo/phases" "$TMP26/.ralph/demo/_shared"
+render_pipeline_script "$TMP26/.ralph/demo.sh" "custom" "" "demo"
+cat > "$TMP26/.ralph/demo/pipeline.json" <<'JSON'
+{
+  "name": "demo",
+  "phases": [
+    { "id": "p01", "type": "oneshot", "prompt": "phases/p01.md", "commit": "p01" }
+  ]
+}
+JSON
+cat > "$TMP26/.ralph/demo/phases/p01.md" <<'PROMPT'
+PHASE_P01_BODY_FOR_PROVENANCE_TEST
+PROMPT
+# Drop the two opt-in shared templates into _shared/ exactly like a real user would.
+cp "$PROVENANCE_TEMPLATE" "$TMP26/.ralph/demo/_shared/10-provenance-rules.md"
+cp "$FORBIDDEN_TEMPLATE"  "$TMP26/.ralph/demo/_shared/20-forbidden-paths.md"
+
+if ! (cd "$TMP26" && DRY_RUN=1 CUSTOM_CMD='echo noop' ./.ralph/demo.sh 1 >"$TMP26/out.txt" 2>&1); then
+  echo "FAIL: provenance/taint shared DRY_RUN should exit 0"
+  cat "$TMP26/out.txt"
+  exit 1
+fi
+# Distinctive lines from each template should appear before the base prompt body.
+assert_contains "$TMP26/out.txt" "Provenance and Source-Citation Rules" "guardrails: provenance rules prepended"
+assert_contains "$TMP26/out.txt" "Forbidden Sources and Contamination Protocol" "guardrails: forbidden paths prepended"
+assert_contains "$TMP26/out.txt" "PHASE_P01_BODY_FOR_PROVENANCE_TEST" "guardrails: base prompt still present"
+prov_line=$(grep -n "Provenance and Source-Citation Rules" "$TMP26/out.txt" | head -1 | cut -d: -f1)
+forb_line=$(grep -n "Forbidden Sources and Contamination Protocol" "$TMP26/out.txt" | head -1 | cut -d: -f1)
+base_line=$(grep -n "PHASE_P01_BODY_FOR_PROVENANCE_TEST" "$TMP26/out.txt" | head -1 | cut -d: -f1)
+if [ -z "$prov_line" ] || [ -z "$forb_line" ] || [ -z "$base_line" ] || [ "$prov_line" -ge "$base_line" ] || [ "$forb_line" -ge "$base_line" ]; then
+  echo "FAIL: opt-in templates must appear before the base prompt"
+  cat "$TMP26/out.txt"
+  exit 1
+fi
+echo "  Test 26 passed: provenance + forbidden-paths templates compose via shared-includes"
+
+echo ""
+echo "All provenance + taint template smoke tests passed."

@@ -116,6 +116,23 @@ For each phase prompt, start from the templates in `scripts/phases/`:
 - `loop-prompt-markdown-queue.md` for loop phases
 - `wrapup-prompt.md` for wrap-up oneshots
 
+For pipelines that derive output from external sources where citations matter
+(specs, audits, research syntheses, anything making claims about a third party),
+also consider these opt-in templates:
+- `provenance-bootstrap.md` — a bootstrap-type oneshot that initializes
+  `provenance-index.md` and `risk-and-taint-log.md` at the pipeline root.
+- `provenance-rules.md` — drop in `.ralph/<pipeline-name>/_shared/` to enforce
+  source-citation rules on every phase.
+- `forbidden-paths.md` — drop in `.ralph/<pipeline-name>/_shared/` for workflows
+  with forbidden source classes (proprietary code, privileged docs, secrets).
+  Edit the "Forbidden paths for this pipeline" section with the user's actual
+  constraints.
+- `red-team-wrapup.md` — a wrap-up oneshot that audits citations and verifies
+  the taint log. Use as the LAST phase when provenance or taint guardrails apply.
+
+Ask the user up front whether the workflow needs provenance/taint enforcement.
+If yes, generate the additional bootstrap, shared, and wrap-up phases.
+
 Replace the `<!-- AI generating the pipeline: ... -->` comments in those templates with
 the concrete task for this pipeline. The "ONE iteration" framing in the loop template
 is load-bearing — keep it verbatim. Only edit the "Your task this iteration" section.

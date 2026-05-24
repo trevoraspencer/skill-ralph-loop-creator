@@ -192,6 +192,8 @@ Pipeline mode uses the markdown-checklist queue convention — the agent prompt 
 
 **Pre-fetching external sources:** for workflows that consume URLs, GitHub repos, or local docs, declare a `shell` phase that invokes `scripts/prefetch.sh` with a TSV manifest. See [SKILL.md](SKILL.md#reference-scriptsprefetchsh--hermetic-corpus-fetcher) for the supported source classes (`http_get_md`, `github_readme`, `github_issues_json`, `github_prs_json`, `local_file`).
 
+**Opt-in provenance + taint guardrails:** for pipelines that decompose or audit external things (third-party products, vendor compliance, legal docs), drop `scripts/phases/provenance-rules.md` and `scripts/phases/forbidden-paths.md` into the pipeline's `_shared/` to enforce source-citation on every claim and a "do not read X" protocol. Add `scripts/phases/red-team-wrapup.md` as the last phase to audit citations and verify the taint log. See [SKILL.md](SKILL.md#opt-in-provenance-and-taint-guardrails) for details.
+
 ## Supported Execution Agents
 
 | Agent | Binary | Headless command template |
