@@ -227,6 +227,22 @@ issues surfaced and were fixed in the same PR:
   the eval'd `$CUSTOM_CMD`, but shellcheck cannot see into `eval`. Added an
   inline `# shellcheck disable=SC2034` directive with a comment explaining why.
 
+### Added: example briefs (`examples/briefs/`)
+
+Three concrete pipeline briefs users can copy and feed to `/forge pipeline`:
+
+- `decompose-public-product.md` — exercises provenance + taint guardrails;
+  loop = one capability per iteration; output = behavioral spec corpus.
+- `audit-vendor-compliance.md` — loop = one control per iteration; output =
+  per-control findings + summary; uses provenance.
+- `generate-reference-docs.md` — loop = one public module per iteration;
+  output = reference docs; ends with a `shell` link-check phase rather than
+  an agent wrap-up.
+
+Each brief covers a different combination of features (prefetch sources,
+output kind, loop unit, guardrails, wrap-up shape) so the set documents the
+main shapes a pipeline can take by example.
+
 ## Critical (fixed)
 
 ### 1. Decompose `prd.json` output was incompatible with forward Ralph
