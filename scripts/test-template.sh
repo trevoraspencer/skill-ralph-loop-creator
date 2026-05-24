@@ -51,7 +51,10 @@ TMP9="$(mktemp -d)"
 TMP10="$(mktemp -d)"
 TMP11="$(mktemp -d)"
 TMP12="$(mktemp -d)"
-trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9" "$TMP10" "$TMP11" "$TMP12"' EXIT
+TMP13="$(mktemp -d)"
+TMP14="$(mktemp -d)"
+TMP15="$(mktemp -d)"
+trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9" "$TMP10" "$TMP11" "$TMP12" "$TMP13" "$TMP14" "$TMP15"' EXIT
 
 # Test 1: successful completion when agent emits COMPLETE marker.
 mkdir -p "$TMP1/.ralph"
@@ -406,3 +409,115 @@ echo "  Test 12 passed: decompose DRY_RUN prints prompt, skips agent"
 
 echo ""
 echo "All DRY_RUN smoke tests passed."
+
+# ═══════════════════════════════════════════════════════
+# Shared-includes tests (.ralph/_shared/*.md prepended to prompt)
+# ═══════════════════════════════════════════════════════
+
+echo ""
+echo "Running shared-includes smoke tests..."
+
+# Test 13: forward Forge with .ralph/_shared/*.md prepends those files (alphabetical) before base prompt
+mkdir -p "$TMP13/.ralph/_shared"
+render_script \
+  "$TMP13/.ralph/smoke.sh" \
+  "bash" \
+  "bash -lc 'echo \"agent should not run\"'"
+cat > "$TMP13/prd.json" <<'JSON'
+{"branchName":"forge/shared-smoke","userStories":[]}
+JSON
+cat > "$TMP13/.ralph/prompt.md" <<'PROMPT'
+BASE_PROMPT_BODY_FORWARD
+PROMPT
+cat > "$TMP13/.ralph/_shared/01-policy.md" <<'PROMPT'
+SHARED_POLICY_LINE_FORWARD
+PROMPT
+cat > "$TMP13/.ralph/_shared/02-templates.md" <<'PROMPT'
+SHARED_TEMPLATES_LINE_FORWARD
+PROMPT
+
+if ! (cd "$TMP13" && DRY_RUN=1 ./.ralph/smoke.sh 1 >"$TMP13/out.txt" 2>&1); then
+  echo "FAIL: forward shared-includes should exit 0 under DRY_RUN"
+  cat "$TMP13/out.txt"
+  exit 1
+fi
+assert_contains "$TMP13/out.txt" "SHARED_POLICY_LINE_FORWARD" "forward shared: 01-policy.md prepended"
+assert_contains "$TMP13/out.txt" "SHARED_TEMPLATES_LINE_FORWARD" "forward shared: 02-templates.md prepended"
+assert_contains "$TMP13/out.txt" "BASE_PROMPT_BODY_FORWARD" "forward shared: base prompt still appears"
+# Order check: shared content should appear BEFORE base prompt
+policy_line=$(grep -n "SHARED_POLICY_LINE_FORWARD" "$TMP13/out.txt" | head -1 | cut -d: -f1)
+base_line=$(grep -n "BASE_PROMPT_BODY_FORWARD" "$TMP13/out.txt" | head -1 | cut -d: -f1)
+if [ -z "$policy_line" ] || [ -z "$base_line" ] || [ "$policy_line" -ge "$base_line" ]; then
+  echo "FAIL: forward shared content must appear before base prompt (policy at $policy_line, base at $base_line)"
+  cat "$TMP13/out.txt"
+  exit 1
+fi
+echo "  Test 13 passed: forward shared-includes prepended in order"
+
+# Test 14: forward Forge without _shared/ directory still works (BC)
+mkdir -p "$TMP14/.ralph"
+render_script \
+  "$TMP14/.ralph/smoke.sh" \
+  "bash" \
+  "bash -lc 'echo \"agent should not run\"'"
+cat > "$TMP14/prd.json" <<'JSON'
+{"branchName":"forge/no-shared-smoke","userStories":[]}
+JSON
+cat > "$TMP14/.ralph/prompt.md" <<'PROMPT'
+BASE_ONLY_PROMPT
+PROMPT
+
+if ! (cd "$TMP14" && DRY_RUN=1 ./.ralph/smoke.sh 1 >"$TMP14/out.txt" 2>&1); then
+  echo "FAIL: forward without _shared should still exit 0"
+  cat "$TMP14/out.txt"
+  exit 1
+fi
+assert_contains "$TMP14/out.txt" "BASE_ONLY_PROMPT" "forward without shared: base prompt printed"
+echo "  Test 14 passed: forward without _shared/ unchanged (BC)"
+
+# Test 15: decompose with .ralph/_shared/*.md prepends shared content to assembled iteration prompt
+mkdir -p "$TMP15/.ralph/_shared"
+render_decompose_script "$TMP15/.ralph/decompose-smoke.sh" "custom" "" "smoke"
+cp "$ROOT_DIR/scripts/decompose-prompt.md" "$TMP15/.ralph/decompose-smoke-prompt.md"
+cat > "$TMP15/.ralph/_shared/01-rules.md" <<'PROMPT'
+SHARED_RULES_LINE_DECOMPOSE
+PROMPT
+cat > "$TMP15/decomp.json" <<'JSON'
+{
+  "feature_name": "Test Feature",
+  "source_urls": [],
+  "capability_surface": "test",
+  "nodes": [
+    {
+      "id": "N-001",
+      "parent_id": null,
+      "title": "Needs Split Node",
+      "description": "Needs splitting.",
+      "status": "needs_split",
+      "children": [],
+      "stories": []
+    }
+  ],
+  "completed_at": null
+}
+JSON
+
+if ! (cd "$TMP15" && DRY_RUN=1 CUSTOM_CMD='echo "agent should not run"' ./.ralph/decompose-smoke.sh 1 >"$TMP15/out.txt" 2>&1); then
+  echo "FAIL: decompose shared-includes should exit 0 under DRY_RUN"
+  cat "$TMP15/out.txt"
+  exit 1
+fi
+assert_contains "$TMP15/out.txt" "SHARED_RULES_LINE_DECOMPOSE" "decompose shared: 01-rules.md prepended"
+assert_contains "$TMP15/out.txt" "Process node ID: N-001" "decompose shared: base iteration prompt still appears with substituted node id"
+# Order check: shared appears before per-iteration content
+shared_line=$(grep -n "SHARED_RULES_LINE_DECOMPOSE" "$TMP15/out.txt" | head -1 | cut -d: -f1)
+iter_line=$(grep -n "Process node ID: N-001" "$TMP15/out.txt" | head -1 | cut -d: -f1)
+if [ -z "$shared_line" ] || [ -z "$iter_line" ] || [ "$shared_line" -ge "$iter_line" ]; then
+  echo "FAIL: decompose shared content must appear before iteration prompt"
+  cat "$TMP15/out.txt"
+  exit 1
+fi
+echo "  Test 15 passed: decompose shared-includes prepended in order"
+
+echo ""
+echo "All shared-includes smoke tests passed."

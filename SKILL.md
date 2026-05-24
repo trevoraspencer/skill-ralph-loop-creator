@@ -365,3 +365,38 @@ DRY_RUN=1 .ralph/decompose-my-run.sh
 The runtime directory (`.ralph/`), runtime files (`.ralph-archive/`, `.ralph-last-branch`),
 the branch prefix in legacy `prd.json` files (`ralph/<name>`), and all generated scripts
 from v1 are unchanged. Only the slash command and the skill `name:` field are renamed.
+
+## Shared-includes — project-wide prompt content prepended to every iteration
+
+Any `.md` files in `.ralph/_shared/` are concatenated (alphabetical order by filename)
+and prepended to the per-iteration prompt for every forward and decompose loop in the
+project. If the `.ralph/_shared/` directory does not exist, scripts behave exactly as
+before (no-op, backward compatible).
+
+Use this for policy, templates, glossary, evidence rules — anything you want every
+iteration of every loop to see without duplicating it across per-loop prompt files.
+
+```text
+project/
+  .ralph/
+    _shared/
+      01-policy.md         # prepended first
+      02-output-format.md  # prepended second
+      03-glossary.md       # prepended third
+    add-task-priorities.sh           # forward loop
+    add-task-priorities-prompt.md
+    decompose-product-x.sh           # decompose loop
+    decompose-product-x-prompt.md
+```
+
+Both loops above receive all three `_shared/*.md` files prepended to their
+per-iteration prompts.
+
+**When generating new loops:** do not create `.ralph/_shared/` automatically — the user
+opts in by creating it themselves. Mention it in the post-generation message if the
+project's nature suggests shared content would help (e.g., "If you want output-format
+or policy rules applied to every iteration, drop them in `.ralph/_shared/*.md`").
+
+**Per-loop shared content** (different shared rules per loop) is not supported in
+forward/decompose modes — use one consolidated `_shared/` for the project, or wait for
+pipeline mode (PR 3) which introduces per-pipeline `_shared/` directories.
