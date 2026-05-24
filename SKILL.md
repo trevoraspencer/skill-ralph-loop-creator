@@ -475,10 +475,72 @@ agent:
 ```
 
 - `id` must be unique within the pipeline.
-- `type` is `oneshot` or `loop`. (Shell-type phases for pre-fetch land in PR 4.)
+- `type` is `oneshot`, `loop`, or `shell`.
 - `prompt` and `queue` paths are relative to `.ralph/<pipeline-name>/`.
-- `commit` (oneshot) and `commit_prefix` (loop) become git commit messages.
+- `commit` (oneshot/shell) and `commit_prefix` (loop) become git commit messages.
 - `max_iters` per phase is optional; falls back to the driver's arg or 200.
+
+### Shell phases — arbitrary scripts (no agent)
+
+For deterministic work that doesn't need an agent — pre-fetching external sources,
+running build steps, transforming files — declare a `shell` phase:
+
+```json
+{
+  "id": "p02",
+  "type": "shell",
+  "script": "phases/p02-prefetch.sh",
+  "commit": "prefetch: external sources"
+}
+```
+
+The driver:
+
+1. Validates the script exists and is executable.
+2. Runs it from `$PROJECT_DIR` with these env vars exported: `PIPELINE_DIR`,
+   `PIPELINE_NAME`, `PROJECT_DIR`.
+3. On success, commits any changes with the phase's `commit` message.
+4. Under `DRY_RUN=1`, prints "would run shell script" and the path; does not execute.
+
+The script chooses its own inputs and outputs. The driver does not preflight the
+script's dependencies — the script should fail with a clear error if missing tools.
+
+### Reference: `scripts/prefetch.sh` — hermetic corpus fetcher
+
+A TSV-driven prefetcher for the common pattern of pulling external sources to local
+disk before a loop phase reads them. Ships with five source classes:
+
+| class | identifier | output |
+|-------|-----------|--------|
+| `http_get_md` | URL | `evidence/http_get_md/<slug>.md` (pandoc HTML→markdown; falls back to `.html` if pandoc fails) |
+| `github_readme` | `owner/repo` | `evidence/github_readme/<slug>.md` |
+| `github_issues_json` | `owner/repo` | `evidence/github_issues_json/<slug>.json` |
+| `github_prs_json` | `owner/repo` | `evidence/github_prs_json/<slug>.json` |
+| `local_file` | path | `evidence/local_file/<slug>.<original-ext>` |
+
+Manifest format (tab-separated, header row):
+
+```text
+class	slug	identifier	notes
+http_get_md	intro	https://example.com/docs/intro	intro page
+github_readme	readme	owner/repo	repo readme
+local_file	internal	docs/spec.md	internal spec
+```
+
+Usage in a shell phase script:
+
+```bash
+#!/usr/bin/env bash
+# .ralph/<pipeline-name>/phases/p02-prefetch.sh
+set -euo pipefail
+# $PIPELINE_DIR is set by the driver
+"${PROJECT_DIR}/scripts/prefetch.sh" \
+  "${PIPELINE_DIR}/manifest.tsv" \
+  "${PIPELINE_DIR}/evidence"
+```
+
+Idempotent — existing outputs are skipped unless `REFRESH=1` is set. Performs its own
+preflight: warns up front if `curl`/`pandoc`/`gh` are missing for the classes used.
 
 ### Markdown-checklist queue
 
@@ -533,5 +595,6 @@ project/
 | `scripts/phases/bootstrap-prompt.md` | Default oneshot bootstrap template |
 | `scripts/phases/loop-prompt-markdown-queue.md` | Default loop-iteration template |
 | `scripts/phases/wrapup-prompt.md` | Default oneshot wrap-up template |
+| `scripts/prefetch.sh` | Reference TSV-driven prefetcher for shell phases |
 | `.ralph/<name>/pipeline.json` | Generated manifest |
 | `.ralph/<name>.sh` | Generated driver script |

@@ -54,10 +54,10 @@ if ! jq -e '
   type == "object" and
   (.name | type == "string" and length > 0) and
   (.phases | type == "array" and length > 0) and
-  (all(.phases[]; .id and .type and (.type == "oneshot" or .type == "loop")))
+  (all(.phases[]; .id and .type and (.type == "oneshot" or .type == "loop" or .type == "shell")))
 ' "$PIPELINE_JSON" >/dev/null 2>&1; then
   echo "Error: $PIPELINE_JSON has invalid schema."
-  echo "Required: {name: string, phases: [{id, type: oneshot|loop, ...}]}"
+  echo "Required: {name: string, phases: [{id, type: oneshot|loop|shell, ...}]}"
   exit 1
 fi
 
@@ -249,6 +249,49 @@ run_oneshot_phase() {
   git_checkpoint "$commit_msg"
 }
 
+run_shell_phase() {
+  local pid="$1" script_path="$2" commit_msg="$3"
+  echo ""
+  echo "═══════════════════════════════════════════════════════"
+  echo "  Phase $pid (shell)"
+  echo "═══════════════════════════════════════════════════════"
+
+  local script="$PIPELINE_DIR/$script_path"
+  if [ ! -f "$script" ]; then
+    echo "Error: phase $pid shell script not found: $script"
+    exit 1
+  fi
+  if [ ! -x "$script" ]; then
+    echo "Error: phase $pid shell script not executable: $script"
+    echo "  Fix with: chmod +x $script"
+    exit 1
+  fi
+
+  if [ -n "$DRY_RUN" ]; then
+    echo "=== DRY_RUN: would run shell script for $pid ==="
+    echo "  script: $script"
+    echo "  would commit: $commit_msg"
+    return 0
+  fi
+
+  # Run with useful env vars exported. Script chooses inputs/outputs.
+  set +e
+  ( cd "$PROJECT_DIR" && \
+    PIPELINE_DIR="$PIPELINE_DIR" \
+    PIPELINE_NAME="$PIPELINE_NAME" \
+    PROJECT_DIR="$PROJECT_DIR" \
+    "$script" )
+  local rc=$?
+  set -e
+
+  if [ "$rc" -ne 0 ]; then
+    echo "Error: phase $pid shell script exited with code $rc"
+    exit "$rc"
+  fi
+
+  git_checkpoint "$commit_msg"
+}
+
 run_loop_phase() {
   local pid="$1" prompt_path="$2" queue_path="$3" commit_prefix="$4" phase_max_iters="$5"
   echo ""
@@ -349,6 +392,12 @@ for pid in "${PHASE_IDS[@]}"; do
       [ -z "$prompt_path" ] && { echo "Error: loop phase $pid missing prompt"; exit 1; }
       [ -z "$queue_path" ] && { echo "Error: loop phase $pid missing queue"; exit 1; }
       run_loop_phase "$pid" "$prompt_path" "$queue_path" "$commit_prefix" "$phase_mi"
+      ;;
+    shell)
+      script_path=$(jq -r --arg id "$pid" '.phases[] | select(.id==$id) | .script // empty' "$PIPELINE_JSON")
+      commit_msg=$(jq -r --arg id "$pid" '.phases[] | select(.id==$id) | .commit // "phase: \($id)"' "$PIPELINE_JSON")
+      [ -z "$script_path" ] && { echo "Error: shell phase $pid missing script"; exit 1; }
+      run_shell_phase "$pid" "$script_path" "$commit_msg"
       ;;
     *)
       echo "Error: unknown phase type '$ptype' for phase $pid"
