@@ -66,7 +66,8 @@ TMP24="$(mktemp -d)"
 TMP25="$(mktemp -d)"
 TMP26="$(mktemp -d)"
 TMP27="$(mktemp -d)"
-trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9" "$TMP10" "$TMP11" "$TMP12" "$TMP13" "$TMP14" "$TMP15" "$TMP16" "$TMP17" "$TMP18" "$TMP19" "$TMP20" "$TMP21" "$TMP22" "$TMP23" "$TMP24" "$TMP25" "$TMP26" "$TMP27"' EXIT
+TMP28="$(mktemp -d)"
+trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9" "$TMP10" "$TMP11" "$TMP12" "$TMP13" "$TMP14" "$TMP15" "$TMP16" "$TMP17" "$TMP18" "$TMP19" "$TMP20" "$TMP21" "$TMP22" "$TMP23" "$TMP24" "$TMP25" "$TMP26" "$TMP27" "$TMP28"' EXIT
 
 # Test 1: successful completion when agent emits COMPLETE marker.
 mkdir -p "$TMP1/.ralph"
@@ -1020,6 +1021,73 @@ if ! git --git-dir="$TMP27/remote.git" show-ref --verify --quiet refs/heads/forg
   exit 1
 fi
 echo "  Test 27 passed: AUTO_PUSH_PR=true pushes branch to remote on completion"
+
+# Test 28: AUTO_PUSH_PR=true with gh missing — push still succeeds, gh-missing
+# fallback message is printed, script exits 0 (the "push failure / missing tool
+# never masks loop success" guarantee).
+mkdir -p "$TMP28/project/.ralph"
+git init -q --bare "$TMP28/remote.git"
+git -C "$TMP28/project" init -q
+git -C "$TMP28/project" config user.email "test@example.com"
+git -C "$TMP28/project" config user.name "Test"
+git -C "$TMP28/project" config commit.gpgsign false
+git -C "$TMP28/project" config tag.gpgsign false
+git -C "$TMP28/project" config gpg.format ""
+git -C "$TMP28/project" remote add origin "$TMP28/remote.git"
+
+echo "init" > "$TMP28/project/seed.txt"
+git -C "$TMP28/project" add -A
+git -C "$TMP28/project" -c commit.gpgsign=false commit -q --no-gpg-sign -m "init"
+git -C "$TMP28/project" branch -M main
+git -C "$TMP28/project" push -q -u origin main 2>/dev/null || true
+git -C "$TMP28/project" checkout -q -b forge/gh-missing-smoke
+
+render_script \
+  "$TMP28/project/.ralph/smoke.sh" \
+  "bash" \
+  "bash -c 'echo \"<promise>COMPLETE</promise>\"'"
+sed -i 's|AUTO_PUSH_PR="false"|AUTO_PUSH_PR="true"|' "$TMP28/project/.ralph/smoke.sh"
+
+cat > "$TMP28/project/prd.json" <<'JSON'
+{"branchName":"forge/gh-missing-smoke","userStories":[]}
+JSON
+
+echo "work" > "$TMP28/project/work.txt"
+git -C "$TMP28/project" add -A
+git -C "$TMP28/project" -c commit.gpgsign=false commit -q --no-gpg-sign -m "work"
+
+# Build a fake PATH containing every standard utility EXCEPT gh.
+# Easier than enumerating: symlink the contents of /usr/bin and /bin, then
+# remove the gh symlink if it exists.
+FAKE_BIN_28="$TMP28/fake-bin"
+mkdir -p "$FAKE_BIN_28"
+for srcdir in /usr/local/bin /usr/bin /bin; do
+  [ -d "$srcdir" ] || continue
+  for f in "$srcdir"/*; do
+    [ -e "$f" ] || continue
+    base="$(basename "$f")"
+    [ "$base" = "gh" ] && continue
+    [ -e "$FAKE_BIN_28/$base" ] || ln -sf "$f" "$FAKE_BIN_28/$base"
+  done
+done
+# Belt and suspenders: ensure gh is NOT in the fake bin even if a tool with
+# that name existed in a directory we scanned.
+rm -f "$FAKE_BIN_28/gh"
+
+if ! (cd "$TMP28/project" && PATH="$FAKE_BIN_28" ./.ralph/smoke.sh 1 >"$TMP28/out.txt" 2>&1); then
+  echo "FAIL: gh-missing smoke should still exit 0 (graceful fallback)"
+  cat "$TMP28/out.txt"
+  exit 1
+fi
+assert_contains "$TMP28/out.txt" "Forge completed all tasks!" "gh-missing: loop completion"
+assert_contains "$TMP28/out.txt" "gh CLI not found" "gh-missing: documented fallback message"
+# Push must still have succeeded.
+if ! git --git-dir="$TMP28/remote.git" show-ref --verify --quiet refs/heads/forge/gh-missing-smoke; then
+  echo "FAIL: branch forge/gh-missing-smoke not in remote (push should have succeeded even without gh)"
+  cat "$TMP28/out.txt"
+  exit 1
+fi
+echo "  Test 28 passed: gh missing → branch still pushed, graceful fallback message, exit 0"
 
 echo ""
 echo "All finalize() auto-push smoke tests passed."
