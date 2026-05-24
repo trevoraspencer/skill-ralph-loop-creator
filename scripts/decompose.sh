@@ -101,9 +101,11 @@ while [ "$iter" -lt "$MAX_ITERS" ]; do
   else
     sed "s|__NEXT_NODE_ID__|${NEXT_NODE}|g" "$PROMPT_FILE" > "$ITER_PROMPT_FILE"
   fi
-  printf '\n## Current decomp.json\n```json\n' >> "$ITER_PROMPT_FILE"
-  cat "$DECOMP_FILE" >> "$ITER_PROMPT_FILE"
-  printf '\n```\n' >> "$ITER_PROMPT_FILE"
+  {
+    printf '\n## Current decomp.json\n```json\n'
+    cat "$DECOMP_FILE"
+    printf '\n```\n'
+  } >> "$ITER_PROMPT_FILE"
 
   # DRY_RUN=1: print the assembled iteration prompt and exit without calling the agent.
   if [ -n "${DRY_RUN:-}" ]; then
