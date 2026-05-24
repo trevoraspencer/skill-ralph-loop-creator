@@ -204,6 +204,17 @@ markdown alternative) became inverted in practice. Existing decompose mode keeps
 its hierarchical JSON state (`decomp.json`) since hierarchy doesn't fit a flat
 checklist anyway.
 
+### Added: GitHub Actions CI
+
+`.github/workflows/test.yml` runs `scripts/test-template.sh` on every push to
+`main` and every pull request. Installs `jq` (the only test dependency not
+pre-installed on `ubuntu-latest`) and configures a global git identity so
+`init_git_repo`'s initial commit succeeds in test temp dirs.
+
+Plan items 1–5 (and this CI add-on) shipped the foundation. Beyond this is
+user-driven discovery from real pipeline runs — anything substantive should
+update `ERRORS.md` honestly and ship as its own small reviewable PR.
+
 ## Critical (fixed)
 
 ### 1. Decompose `prd.json` output was incompatible with forward Ralph

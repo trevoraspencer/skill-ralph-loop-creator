@@ -1,5 +1,7 @@
 # Forge (formerly Ralph)
 
+[![test](https://github.com/trevoraspencer/skill-ralph-loop-creator/actions/workflows/test.yml/badge.svg)](https://github.com/trevoraspencer/skill-ralph-loop-creator/actions/workflows/test.yml)
+
 **Agent-agnostic, platform-agnostic autonomous loop creator.** Install Forge in any agent platform that supports skills (Factory.AI Droid, Claude Code, …) and use it to generate **portable external bash loops** that drive **any headless coding-agent CLI** (claude, droid, codex, opencode, gemini, copilot, …) across many fresh-context iterations. Forward mode implements features end-to-end; decompose mode breaks existing features into atomic user stories for greenfield re-implementation. Works for code, specs, audits, docs, and research alike.
 
 h/t [Geoffrey Huntley](https://ghuntley.com/ralph/) and [Ben Tossell](https://github.com/factory-ben/ralph) for the original Ralph pattern.
@@ -244,6 +246,10 @@ The `.ralph/` runtime directory name is preserved from v1 for backward compatibi
 ```bash
 ./scripts/test-template.sh
 ```
+
+CI runs the same smoke tests on every push and pull request via GitHub Actions
+(`.github/workflows/test.yml`). The badge at the top reflects the latest run on
+`main`.
 
 ## Troubleshooting
 
