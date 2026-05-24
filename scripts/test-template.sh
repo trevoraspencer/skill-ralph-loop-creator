@@ -67,7 +67,8 @@ TMP25="$(mktemp -d)"
 TMP26="$(mktemp -d)"
 TMP27="$(mktemp -d)"
 TMP28="$(mktemp -d)"
-trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9" "$TMP10" "$TMP11" "$TMP12" "$TMP13" "$TMP14" "$TMP15" "$TMP16" "$TMP17" "$TMP18" "$TMP19" "$TMP20" "$TMP21" "$TMP22" "$TMP23" "$TMP24" "$TMP25" "$TMP26" "$TMP27" "$TMP28"' EXIT
+TMP29="$(mktemp -d)"
+trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9" "$TMP10" "$TMP11" "$TMP12" "$TMP13" "$TMP14" "$TMP15" "$TMP16" "$TMP17" "$TMP18" "$TMP19" "$TMP20" "$TMP21" "$TMP22" "$TMP23" "$TMP24" "$TMP25" "$TMP26" "$TMP27" "$TMP28" "$TMP29"' EXIT
 
 # Test 1: successful completion when agent emits COMPLETE marker.
 mkdir -p "$TMP1/.ralph"
@@ -1091,3 +1092,78 @@ echo "  Test 28 passed: gh missing → branch still pushed, graceful fallback me
 
 echo ""
 echo "All finalize() auto-push smoke tests passed."
+
+# ═══════════════════════════════════════════════════════
+# Pipeline loop multi-iteration progression test
+# ═══════════════════════════════════════════════════════
+
+echo ""
+echo "Running pipeline loop multi-iteration smoke tests..."
+
+# Test 29: pipeline loop phase actually progresses through a multi-item queue.
+# Mock agent flips the first `- [ ]` to `- [x]` per iteration (the contract
+# loop-prompt-markdown-queue.md teaches real agents to follow). Verifies:
+#   - both queue items get flipped
+#   - loop exits via "queue empty" (not via max_iters)
+#   - one commit per iteration
+#   - script exits 0
+mkdir -p "$TMP29/.ralph/demo/phases" "$TMP29/.ralph/demo/queues"
+init_git_repo "$TMP29"
+render_pipeline_script "$TMP29/.ralph/demo.sh" "custom" "" "demo"
+cat > "$TMP29/.ralph/demo/pipeline.json" <<'JSON'
+{
+  "name": "demo",
+  "phases": [
+    { "id": "p01", "type": "loop", "prompt": "phases/p01.md", "queue": "queues/work.md", "commit_prefix": "iter" }
+  ]
+}
+JSON
+cat > "$TMP29/.ralph/demo/phases/p01.md" <<'PROMPT'
+loop-prompt-body
+PROMPT
+cat > "$TMP29/.ralph/demo/queues/work.md" <<'Q'
+- [ ] item-alpha
+- [ ] item-beta
+Q
+
+# Mock agent: flip the first `- [ ]` in the queue file to `- [x]`. The driver
+# computes the queue path from pipeline.json, but the agent (in production)
+# would be told the path via the prompt. For test purposes we hardcode it
+# relative to the project dir.
+MOCK_FLIP="sed -i '0,/^- \\[ \\]/{s//- [x]/}' '$TMP29/.ralph/demo/queues/work.md'"
+
+# Drive max_iters=3 (1 above queue size) so the loop exits via queue-empty
+# rather than via max_iters.
+if ! (cd "$TMP29" && CUSTOM_CMD="$MOCK_FLIP" ./.ralph/demo.sh 3 >"$TMP29/out.txt" 2>&1); then
+  echo "FAIL: multi-iteration loop should exit 0"
+  cat "$TMP29/out.txt"
+  exit 1
+fi
+# Loop must exit via queue-empty (after exactly 2 iterations).
+assert_contains "$TMP29/out.txt" "Queue empty after 2 iterations" "multi-iter: queue-empty exit after 2"
+# Queue file should have zero pending items left.
+if grep -q '^- \[ \]' "$TMP29/.ralph/demo/queues/work.md"; then
+  echo "FAIL: queue should be fully drained"
+  cat "$TMP29/.ralph/demo/queues/work.md"
+  exit 1
+fi
+# Both checkboxes should be flipped.
+if [ "$(grep -c '^- \[x\]' "$TMP29/.ralph/demo/queues/work.md")" -ne 2 ]; then
+  echo "FAIL: expected exactly 2 flipped checkboxes"
+  cat "$TMP29/.ralph/demo/queues/work.md"
+  exit 1
+fi
+# Exactly two `iter:` commits should land.
+iter_commits=$(git -C "$TMP29" log --pretty=%s | grep -c '^iter:' || true)
+if [ "$iter_commits" -ne 2 ]; then
+  echo "FAIL: expected exactly 2 'iter:' commits, got $iter_commits"
+  git -C "$TMP29" log --oneline
+  exit 1
+fi
+# Specifically: one commit per item, in queue order.
+git -C "$TMP29" log --pretty=%s | head -2 | grep -q 'iter: item-beta' || { echo "FAIL: most recent commit not iter: item-beta"; git -C "$TMP29" log --oneline; exit 1; }
+git -C "$TMP29" log --pretty=%s | head -2 | tail -1 | grep -q 'iter: item-alpha' || { echo "FAIL: second-most-recent commit not iter: item-alpha"; git -C "$TMP29" log --oneline; exit 1; }
+echo "  Test 29 passed: loop progressed through 2-item queue (2 flips, 2 commits, queue-empty exit)"
+
+echo ""
+echo "All pipeline loop multi-iteration smoke tests passed."
