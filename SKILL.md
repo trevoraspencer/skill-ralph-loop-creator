@@ -1,11 +1,15 @@
 ---
-name: ralph
-description: "Agent-agnostic autonomous loop creator. Use when asked to 'use ralph', 'ralph this', 'reverse ralph', 'decompose a feature', or '/ralph decompose'. Forward mode implements features end-to-end; decompose mode breaks existing features into atomic user stories for reimplementation."
+name: forge
+description: "Agent-agnostic, platform-agnostic autonomous loop creator. Generates portable external bash loops that drive any headless coding-agent CLI (claude, droid, codex, opencode, gemini, copilot, …) across fresh-context iterations. Forward mode implements features end-to-end; decompose mode breaks existing features into atomic user stories for reimplementation. Works for code, specs, audits, docs, and research alike. Use when asked to '/forge', '/forge decompose', 'use forge', 'forge this', 'decompose a feature', 'reverse ralph', 'use ralph' (legacy), or 'ralph this' (legacy)."
 ---
 
-# Ralph - Agent-Agnostic Autonomous Loop Creator
+# Forge — Agent-Agnostic, Platform-Agnostic Autonomous Loop Creator
 
-Ralph creates autonomous coding loops that implement features by breaking them into small user stories and completing them one at a time. Each iteration spawns a fresh headless agent with clean context. Memory persists via git, `progress.txt`, and `prd.json`. Ralph is not tied to any single AI agent — the user chooses which agent and model powers each loop.
+Forge generates portable external bash loops that drive any headless coding-agent CLI (claude, droid, codex, opencode, gemini, copilot, …) across many fresh-context iterations. Implements forward, decompose, and (coming soon) multi-phase pipeline workflows. Memory persists via git, `progress.txt`, and `prd.json`. Forge is not tied to any single AI agent or platform — the user chooses which agent powers each loop, and the skill installs in any platform that supports skills (Factory.AI Droid, Claude Code, …).
+
+> **Previously known as Ralph.** The v1 invocation `/ralph` is renamed to `/forge`. Existing `.ralph/*.sh` generated scripts continue to work unchanged — only the slash command and the skill `name:` field change. Natural-language triggers like "use ralph to …" still route here for muscle-memory continuity.
+
+> **How this compares to other tools you may already use.** If you only need a single in-session loop with one agent, use that agent's native looping plugin (e.g., Anthropic's `/ralph-loop` plugin for Claude Code, which re-feeds the same prompt via a Stop hook in-session). If you want methodology guidance — brainstorming, planning, TDD, code review — use a methodology-focused plugin for your platform (e.g., Anthropic's Superpowers plugin for Claude Code). Forge is complementary to both: it generates **external** bash loops, **across many fresh-context iterations**, **for any CLI**, with optional multi-phase pipeline orchestration. Use whichever combination fits the task.
 
 ## Workflow
 
@@ -84,7 +88,7 @@ Suggest a name based on the feature in kebab-case (e.g., `add-task-priorities`).
 
 #### 2d. Auto-push and create PR?
 
-Ask the user: **"Should Ralph automatically push the branch and create a PR when the loop finishes?"**
+Ask the user: **"Should Forge automatically push the branch and create a PR when the loop finishes?"**
 
 - **Yes** — When the loop ends (all stories complete or max iterations reached), the script will push the branch to `origin` and create a pull request via `gh pr create`. The base branch (e.g., `main` or `master`) is auto-detected at generation time by checking which branch exists on the remote.
 - **No** — The script only runs locally. All commits stay local. The user pushes and creates PRs themselves.
@@ -103,7 +107,7 @@ Generate a `prd.json` file in the project root:
 ```json
 {
   "project": "[Project Name]",
-  "branchName": "ralph/[feature-name-kebab-case]",
+  "branchName": "forge/[feature-name-kebab-case]",
   "description": "[Feature description]",
   "userStories": [
     {
@@ -187,7 +191,7 @@ Each story MUST be completable in ONE iteration. If you can't describe it in 2-3
 
 ## Example
 
-**User says:** "use ralph to add task priorities"
+**User says:** "use forge to add task priorities" (or legacy: "use ralph to add task priorities")
 
 **Step 1:** Read the feature description, ask clarifying questions.
 
@@ -197,7 +201,7 @@ Each story MUST be completable in ONE iteration. If you can't describe it in 2-3
 ```json
 {
   "project": "TaskApp",
-  "branchName": "ralph/task-priority",
+  "branchName": "forge/task-priority",
   "description": "Add priority levels (high/medium/low) to tasks",
   "userStories": [
     {
@@ -235,7 +239,7 @@ Each story MUST be completable in ONE iteration. If you can't describe it in 2-3
 
 > prd.json created with 2 user stories. Run `.ralph/add-task-priorities.sh` to start autonomous execution.
 
-## How Ralph Executes
+## How Forge Executes
 
 Each iteration, a fresh headless agent:
 1. Reads `prd.json` and `progress.txt`
@@ -251,7 +255,7 @@ Loop continues until all stories pass or max iterations hit.
 
 If the user opted for auto-push+PR (Step 2d), then after the loop ends (all stories complete or max iterations reached):
 1. The loop script pushes the branch to origin
-2. Creates a PR via `gh pr create` from the ralph branch to the default branch
+2. Creates a PR via `gh pr create` from the forge branch to the default branch
 3. If `gh` CLI is not available or PR creation fails, prints manual instructions instead of aborting
 4. Push or PR failures are handled gracefully — they never mask a successful loop run
 
@@ -268,13 +272,14 @@ If the user chose local-only, the script simply exits after the loop. All commit
 
 ## Decompose Mode
 
-Triggered by: `/ralph decompose <input>` or natural language like "reverse ralph this feature",
-"decompose X into a replication plan", "break this feature down into user stories".
+Triggered by: `/forge decompose <input>` (or legacy `/ralph decompose <input>`) or natural
+language like "reverse ralph this feature", "decompose X into a replication plan", "break
+this feature down into user stories".
 
 ### What it does
 
-Reverse Ralph takes any description of an existing feature and decomposes it — recursively
-and completely — into an atomized `prd.json` that a forward Ralph loop can execute to
+Decompose mode takes any description of an existing feature and decomposes it — recursively
+and completely — into an atomized `prd.json` that a forward Forge loop can execute to
 greenfield-reimplement the feature.
 
 Decomposition is behavioral and functional: it captures what the feature does and how it
@@ -302,7 +307,7 @@ Follow the detailed instructions in `scripts/decompose-init-prompt.md` for steps
    generated script filename: `.ralph/decompose-<n>.sh`.
 
 3. **Ask which execution agent** to use for the decomposition loop. Same agent matrix as
-   forward Ralph: `claude`, `droid`, `codex`, `opencode`, `gemini`, `copilot`,
+   forward Forge: `claude`, `droid`, `codex`, `opencode`, `gemini`, `copilot`,
    `cc-compatible`, or `custom`.
 
 4. **Ask which model** (optional — leave blank to use the CLI default).
@@ -335,6 +340,28 @@ Follow the detailed instructions in `scripts/decompose-init-prompt.md` for steps
 |------|---------|
 | `scripts/decompose-init-prompt.md` | Initialization prompt for the orchestrating agent (steps 1–7) |
 | `decomp.json` | Decomposition state tree with nodes and status |
-| `prd.json` | Final output — forward-Ralph-compatible flat story list |
+| `prd.json` | Final output — forward-Forge-compatible flat story list |
 | `.ralph/decompose-<n>.sh` | Generated decomposition loop script |
 | `.ralph/decompose-<n>-prompt.md` | Prompt file for the decomposition loop |
+
+## DRY_RUN — verify wiring without burning tokens
+
+Both generated loop scripts (`.ralph/<name>.sh` and `.ralph/decompose-<n>.sh`) support a
+`DRY_RUN=1` env flag. With `DRY_RUN=1`, the script:
+
+1. Runs all preflight checks (jq, agent binary, prd.json/decomp.json validity).
+2. On the first iteration, prints the assembled prompt to stdout.
+3. Skips the actual agent invocation.
+4. Exits 0.
+
+Use this to verify that a freshly-generated loop is wired correctly (prompt file present,
+agent binary on PATH, prd.json or decomp.json valid) before paying for tokens:
+
+```bash
+DRY_RUN=1 .ralph/my-loop.sh
+DRY_RUN=1 .ralph/decompose-my-run.sh
+```
+
+The runtime directory (`.ralph/`), runtime files (`.ralph-archive/`, `.ralph-last-branch`),
+the branch prefix in legacy `prd.json` files (`ralph/<name>`), and all generated scripts
+from v1 are unchanged. Only the slash command and the skill `name:` field are renamed.

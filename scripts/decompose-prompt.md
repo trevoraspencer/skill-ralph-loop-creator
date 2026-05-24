@@ -1,4 +1,4 @@
-You are running one iteration of a Reverse Ralph decomposition loop.
+You are running one iteration of a Forge decompose loop (formerly "Reverse Ralph").
 
 Your job is to process a single node in `decomp.json` and update the file on disk.
 Do NOT implement any code. Do NOT create any files other than updating `decomp.json`.

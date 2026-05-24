@@ -49,7 +49,9 @@ TMP7="$(mktemp -d)"
 TMP8="$(mktemp -d)"
 TMP9="$(mktemp -d)"
 TMP10="$(mktemp -d)"
-trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9" "$TMP10"' EXIT
+TMP11="$(mktemp -d)"
+TMP12="$(mktemp -d)"
+trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9" "$TMP10" "$TMP11" "$TMP12"' EXIT
 
 # Test 1: successful completion when agent emits COMPLETE marker.
 mkdir -p "$TMP1/.ralph"
@@ -66,7 +68,7 @@ if ! (cd "$TMP1" && ./.ralph/smoke.sh 1 >"$TMP1/out.txt" 2>&1); then
   cat "$TMP1/out.txt"
   exit 1
 fi
-assert_contains "$TMP1/out.txt" "Ralph completed all tasks!" "completion path"
+assert_contains "$TMP1/out.txt" "Forge completed all tasks!" "completion path"
 
 # Test 2: invalid prd.json fails preflight.
 mkdir -p "$TMP2/.ralph"
@@ -102,10 +104,10 @@ if (cd "$TMP3" && ./.ralph/smoke.sh 1 >"$TMP3/out.txt" 2>&1); then
 fi
 assert_contains "$TMP3/out.txt" "not installed or not on PATH" "agent binary preflight"
 
-echo "All forward Ralph smoke tests passed."
+echo "All forward Forge smoke tests passed."
 
 # ═══════════════════════════════════════════════════════
-# Reverse Ralph (decompose.sh) smoke tests
+# Forge decompose (decompose.sh) smoke tests
 # ═══════════════════════════════════════════════════════
 
 DECOMPOSE_TEMPLATE="$ROOT_DIR/scripts/decompose.sh"
@@ -229,7 +231,7 @@ if [ ! -f "$TMP7/prd.json" ]; then
   echo "FAIL: prd.json was not created"
   exit 1
 fi
-# Verify prd.json uses forward-Ralph-compatible schema (branchName + userStories + camelCase)
+# Verify prd.json uses forward-Forge-compatible schema (branchName + userStories + camelCase)
 if ! jq -e '
   type == "object" and
   (.branchName | type == "string" and length > 0) and
@@ -238,7 +240,7 @@ if ! jq -e '
   (.userStories[0].notes | type == "string") and
   (.userStories[0].passes == false)
 ' "$TMP7/prd.json" >/dev/null 2>&1; then
-  echo "FAIL: prd.json schema is not forward-Ralph-compatible"
+  echo "FAIL: prd.json schema is not forward-Forge-compatible"
   echo "--- prd.json ---"
   cat "$TMP7/prd.json"
   exit 1
@@ -274,7 +276,7 @@ if (cd "$TMP8" && CUSTOM_CMD='echo "mock agent iteration"' ./.ralph/decompose-sm
   # It should exit 0 (partial progress, max iterations reached)
   :
 fi
-assert_contains "$TMP8/out.txt" "Reverse Ralph iteration 1" "decompose: ran iteration 1"
+assert_contains "$TMP8/out.txt" "Forge decompose iteration 1" "decompose: ran iteration 1"
 assert_contains "$TMP8/out.txt" "Pending nodes: 1" "decompose: found pending node"
 assert_contains "$TMP8/out.txt" "Iteration 1 complete" "decompose: iteration completed"
 echo "  Test 8 passed: single iteration with needs_split node"
@@ -329,3 +331,78 @@ echo "  Test 10 passed: invalid max_iterations"
 
 echo ""
 echo "All decompose template smoke tests passed."
+
+# ═══════════════════════════════════════════════════════
+# DRY_RUN tests (forward + decompose)
+# ═══════════════════════════════════════════════════════
+
+echo ""
+echo "Running DRY_RUN smoke tests..."
+
+# Test 11: forward Ralph DRY_RUN=1 prints prompt content and skips agent call
+mkdir -p "$TMP11/.ralph"
+render_script \
+  "$TMP11/.ralph/smoke.sh" \
+  "bash" \
+  "bash -lc 'echo \"AGENT_SHOULD_NOT_RUN_IN_DRY_RUN\"'"
+cat > "$TMP11/prd.json" <<'JSON'
+{"branchName":"forge/dry-run-smoke","userStories":[]}
+JSON
+cat > "$TMP11/.ralph/prompt.md" <<'PROMPT'
+DRY_RUN_TEST_PROMPT_BODY_FORWARD
+PROMPT
+
+if ! (cd "$TMP11" && DRY_RUN=1 ./.ralph/smoke.sh 1 >"$TMP11/out.txt" 2>&1); then
+  echo "FAIL: DRY_RUN should exit 0"
+  cat "$TMP11/out.txt"
+  exit 1
+fi
+assert_contains "$TMP11/out.txt" "DRY_RUN" "forward DRY_RUN: banner present"
+assert_contains "$TMP11/out.txt" "DRY_RUN_TEST_PROMPT_BODY_FORWARD" "forward DRY_RUN: prompt printed"
+if grep -q "AGENT_SHOULD_NOT_RUN_IN_DRY_RUN" "$TMP11/out.txt"; then
+  echo "FAIL: agent command must not execute under DRY_RUN"
+  cat "$TMP11/out.txt"
+  exit 1
+fi
+echo "  Test 11 passed: forward DRY_RUN prints prompt, skips agent"
+
+# Test 12: decompose Ralph DRY_RUN=1 prints assembled iteration prompt and skips agent call
+mkdir -p "$TMP12/.ralph"
+render_decompose_script "$TMP12/.ralph/decompose-smoke.sh" "custom" "" "smoke"
+cp "$ROOT_DIR/scripts/decompose-prompt.md" "$TMP12/.ralph/decompose-smoke-prompt.md"
+cat > "$TMP12/decomp.json" <<'JSON'
+{
+  "feature_name": "Test Feature",
+  "source_urls": [],
+  "capability_surface": "test",
+  "nodes": [
+    {
+      "id": "N-001",
+      "parent_id": null,
+      "title": "Needs Split Node",
+      "description": "Needs splitting.",
+      "status": "needs_split",
+      "children": [],
+      "stories": []
+    }
+  ],
+  "completed_at": null
+}
+JSON
+
+if ! (cd "$TMP12" && DRY_RUN=1 CUSTOM_CMD='echo "AGENT_SHOULD_NOT_RUN_DECOMPOSE_DRY_RUN"' ./.ralph/decompose-smoke.sh 1 >"$TMP12/out.txt" 2>&1); then
+  echo "FAIL: decompose DRY_RUN should exit 0"
+  cat "$TMP12/out.txt"
+  exit 1
+fi
+assert_contains "$TMP12/out.txt" "DRY_RUN" "decompose DRY_RUN: banner present"
+assert_contains "$TMP12/out.txt" "Process node ID: N-001" "decompose DRY_RUN: prompt printed with substituted node id"
+if grep -q "AGENT_SHOULD_NOT_RUN_DECOMPOSE_DRY_RUN" "$TMP12/out.txt"; then
+  echo "FAIL: agent command must not execute under DRY_RUN"
+  cat "$TMP12/out.txt"
+  exit 1
+fi
+echo "  Test 12 passed: decompose DRY_RUN prints prompt, skips agent"
+
+echo ""
+echo "All DRY_RUN smoke tests passed."
