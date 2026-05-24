@@ -2,6 +2,12 @@
 
 You are an autonomous coding agent working on a software project.
 
+## CRITICAL RULE — ONE STORY PER INVOCATION
+
+You MUST complete exactly ONE user story and then STOP. Do not continue to the next story. Do not "peek ahead." Do not start any work on subsequent stories. After you commit your changes for the current story and update prd.json and progress.txt, you are DONE. End your response immediately. A new agent instance will be spawned to handle the next story.
+
+**Violating this rule corrupts the progress tracking and wastes context.**
+
 ## Your Task
 
 1. Read the PRD at `prd.json` (in the project root)
@@ -99,18 +105,19 @@ For any story that changes UI, you MUST verify it works in the browser:
 
 A frontend story is NOT complete until browser verification passes.
 
-## Stop Condition
+## Stop Condition — READ CAREFULLY
 
-After completing a user story, check if ALL stories have `passes: true`.
+After completing ONE user story (commit done, prd.json updated, progress.txt updated):
 
-If ALL stories are complete and passing, reply with:
-<promise>COMPLETE</promise>
+1. Check if ALL stories now have `passes: true`.
+2. If YES (all complete): reply with `<promise>COMPLETE</promise>` and stop.
+3. If NO (stories remain): **STOP IMMEDIATELY.** Do not start the next story. Do not do any more work. End your response right now. A fresh agent instance will handle the next story.
 
-If there are still stories with `passes: false`, end your response normally (another iteration will pick up the next story).
+**You are only allowed to work on ONE story. Then you MUST stop.**
 
 ## Important
 
-- Work on ONE story per iteration
+- **ONE story per invocation — then stop. This is non-negotiable.**
 - Commit frequently
 - Keep CI green
 - Read the Codebase Patterns section in progress.txt before starting
