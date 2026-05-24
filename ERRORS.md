@@ -243,6 +243,25 @@ back to printing manual PR-creation instructions in that case rather than
 failing the script, and the test's grep allows for either path. This is the
 "push failure never masks loop success" guarantee from the original design.
 
+### Added: test coverage for `finalize()` graceful `gh`-missing path
+
+Test 28 explicitly exercises the gh-missing fallback that Test 27's grep
+tolerates. Setup is the same as T27 but the script runs with `PATH` pointed
+at a fake bin directory that contains every standard utility EXCEPT `gh`.
+
+Asserts:
+- the loop still completes (`Forge completed all tasks!`)
+- the documented `gh CLI not found.` fallback message appears
+- the feature branch lands in the remote (push succeeds without `gh`)
+- the script exits 0 (the "push failure / missing tool never masks loop
+  success" guarantee)
+
+Initial implementation used a hand-enumerated allowlist of "essential commands"
+to symlink into the fake bin, which broke because the script also needs `date`
+and `seq` (and likely others if dependencies grow). Switched to allowlisting
+*everything* in `/usr/local/bin`, `/usr/bin`, `/bin` and explicitly removing the
+`gh` symlink. Robust to future tooling additions in the scripts.
+
 ### Added: example briefs (`examples/briefs/`)
 
 Three concrete pipeline briefs users can copy and feed to `/forge pipeline`:
