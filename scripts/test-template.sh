@@ -65,7 +65,8 @@ TMP23="$(mktemp -d)"
 TMP24="$(mktemp -d)"
 TMP25="$(mktemp -d)"
 TMP26="$(mktemp -d)"
-trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9" "$TMP10" "$TMP11" "$TMP12" "$TMP13" "$TMP14" "$TMP15" "$TMP16" "$TMP17" "$TMP18" "$TMP19" "$TMP20" "$TMP21" "$TMP22" "$TMP23" "$TMP24" "$TMP25" "$TMP26"' EXIT
+TMP27="$(mktemp -d)"
+trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9" "$TMP10" "$TMP11" "$TMP12" "$TMP13" "$TMP14" "$TMP15" "$TMP16" "$TMP17" "$TMP18" "$TMP19" "$TMP20" "$TMP21" "$TMP22" "$TMP23" "$TMP24" "$TMP25" "$TMP26" "$TMP27"' EXIT
 
 # Test 1: successful completion when agent emits COMPLETE marker.
 mkdir -p "$TMP1/.ralph"
@@ -949,3 +950,76 @@ echo "  Test 26 passed: provenance + forbidden-paths templates compose via share
 
 echo ""
 echo "All provenance + taint template smoke tests passed."
+
+# ═══════════════════════════════════════════════════════
+# finalize() auto-push tests (forward ralph.sh)
+# ═══════════════════════════════════════════════════════
+
+echo ""
+echo "Running finalize() auto-push smoke tests..."
+
+# Test 27: AUTO_PUSH_PR=true + agent emits COMPLETE → branch is pushed to remote.
+# Uses a local bare repo as the remote so `git push` actually succeeds offline.
+# gh CLI may or may not be present; either way the push should land. If gh is
+# missing or PR creation fails, the script must still exit 0 (graceful failure).
+mkdir -p "$TMP27/project/.ralph"
+git init -q --bare "$TMP27/remote.git"
+git -C "$TMP27/project" init -q
+git -C "$TMP27/project" config user.email "test@example.com"
+git -C "$TMP27/project" config user.name "Test"
+git -C "$TMP27/project" config commit.gpgsign false
+git -C "$TMP27/project" config tag.gpgsign false
+git -C "$TMP27/project" config gpg.format ""
+git -C "$TMP27/project" remote add origin "$TMP27/remote.git"
+
+# Seed: initial commit on main + push, then branch
+echo "init" > "$TMP27/project/seed.txt"
+git -C "$TMP27/project" add -A
+git -C "$TMP27/project" -c commit.gpgsign=false commit -q --no-gpg-sign -m "init"
+git -C "$TMP27/project" branch -M main
+git -C "$TMP27/project" push -q -u origin main 2>/dev/null || true
+git -C "$TMP27/project" checkout -q -b forge/auto-push-smoke
+
+# Render the script and flip AUTO_PUSH_PR to true; bake a base branch of "main".
+render_script \
+  "$TMP27/project/.ralph/smoke.sh" \
+  "bash" \
+  "bash -lc 'echo \"<promise>COMPLETE</promise>\"'"
+sed -i 's|AUTO_PUSH_PR="false"|AUTO_PUSH_PR="true"|' "$TMP27/project/.ralph/smoke.sh"
+sed -i 's|DEFAULT_BRANCH="main"|DEFAULT_BRANCH="main"|' "$TMP27/project/.ralph/smoke.sh"
+
+cat > "$TMP27/project/prd.json" <<'JSON'
+{"branchName":"forge/auto-push-smoke","userStories":[]}
+JSON
+
+# Make a commit on the feature branch so finalize() has something to push.
+echo "work" > "$TMP27/project/work.txt"
+git -C "$TMP27/project" add -A
+git -C "$TMP27/project" -c commit.gpgsign=false commit -q --no-gpg-sign -m "work"
+
+if ! (cd "$TMP27/project" && ./.ralph/smoke.sh 1 >"$TMP27/out.txt" 2>&1); then
+  echo "FAIL: auto-push smoke should exit 0"
+  cat "$TMP27/out.txt"
+  exit 1
+fi
+# Loop must have completed.
+assert_contains "$TMP27/out.txt" "Forge completed all tasks!" "auto-push: loop completion"
+# finalize() must have attempted push (look for either success or graceful gh-missing message).
+if ! grep -qE "Pushing branch and creating PR|push failed|gh CLI not found|PR created|PR creation failed|already exists for branch" "$TMP27/out.txt"; then
+  echo "FAIL: finalize() did not run (no push/PR output found)"
+  cat "$TMP27/out.txt"
+  exit 1
+fi
+# Verify the branch landed in the remote.
+if ! git --git-dir="$TMP27/remote.git" show-ref --verify --quiet refs/heads/forge/auto-push-smoke; then
+  echo "FAIL: branch forge/auto-push-smoke not present in remote $TMP27/remote.git"
+  echo "--- script output ---"
+  cat "$TMP27/out.txt"
+  echo "--- remote refs ---"
+  git --git-dir="$TMP27/remote.git" for-each-ref --format='%(refname)'
+  exit 1
+fi
+echo "  Test 27 passed: AUTO_PUSH_PR=true pushes branch to remote on completion"
+
+echo ""
+echo "All finalize() auto-push smoke tests passed."

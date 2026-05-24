@@ -227,6 +227,22 @@ issues surfaced and were fixed in the same PR:
   the eval'd `$CUSTOM_CMD`, but shellcheck cannot see into `eval`. Added an
   inline `# shellcheck disable=SC2034` directive with a comment explaining why.
 
+### Added: test coverage for `finalize()` auto-push
+
+The `finalize()` function in `scripts/ralph.sh` (push branch + create PR after the
+loop completes) had no test coverage prior to this. Adding Test 27:
+
+- Sets up a temp project with a local bare repo as the git remote
+- Renders the script with `AUTO_PUSH_PR="true"`
+- Runs with an agent that emits `<promise>COMPLETE</promise>` on iteration 1
+- Asserts loop completion, asserts `finalize()` ran (output contains push/PR
+  messaging), and verifies the feature branch actually landed in the remote
+
+The test is tolerant of `gh` being absent — `finalize()` is documented to fall
+back to printing manual PR-creation instructions in that case rather than
+failing the script, and the test's grep allows for either path. This is the
+"push failure never masks loop success" guarantee from the original design.
+
 ### Added: example briefs (`examples/briefs/`)
 
 Three concrete pipeline briefs users can copy and feed to `/forge pipeline`:
