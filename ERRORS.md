@@ -63,6 +63,61 @@ Three new smoke tests in `scripts/test-template.sh`:
 rules per loop). For v1 modes, one consolidated project-wide `_shared/` is sufficient
 for the common case.
 
+### Added: pipeline mode (`/forge pipeline @brief.md`)
+
+Multi-phase pipeline driver that orchestrates a sequence of phases sandwiching a
+loop: bootstrap (1+ oneshot phases) → loop (1+ phases with markdown-checklist queues)
+→ wrap-up (1+ oneshot phases). Each phase commits independently.
+
+New files:
+
+- `scripts/pipeline.sh` — reference driver template with `__AGENT__`, `__MODEL__`,
+  `__PIPELINE_NAME__` placeholders. Supports `oneshot` and `loop` phase types. Honors
+  `DRY_RUN=1` (skip agent calls, print prompts + queues) and `START_AT=<phase-id>`
+  (resume from a specific phase).
+- `scripts/pipeline-init-prompt.md` — orchestrating prompt that reads the user's
+  brief, asks configuration questions, designs the phase shape, and generates the
+  pipeline files.
+- `scripts/phases/bootstrap-prompt.md`, `loop-prompt-markdown-queue.md`,
+  `wrapup-prompt.md` — default phase prompt templates the orchestrating agent
+  starts from. The loop template's "you are ONE iteration" framing is load-bearing
+  and must not be edited.
+
+Runtime layout:
+
+```
+.ralph/
+  <pipeline-name>.sh             # generated driver
+  <pipeline-name>/
+    pipeline.json                # manifest
+    _shared/*.md                 # (optional) per-pipeline shared content
+    phases/*.md                  # per-phase prompts
+    queues/*.md                  # markdown-checklist queues for loop phases
+```
+
+Key behavior: if a loop phase hits `max_iters` without draining its queue, the
+driver exits 0 immediately and downstream wrap-up phases are NOT run. Wrap-up
+phases assume the loop is complete, so running them on an incomplete loop would
+produce wrong output. User re-runs with `START_AT=<that-phase-id>` to resume.
+
+Six new smoke tests in `scripts/test-template.sh` (Tests 16-21):
+
+- Test 16: pipeline DRY_RUN over a 3-phase pipeline (oneshot, loop, oneshot).
+- Test 17: `START_AT=p02` skips p01.
+- Test 18: missing `pipeline.json` fails preflight.
+- Test 19: invalid `pipeline.json` schema fails preflight.
+- Test 20: real-run loop phase hitting `max_iters` with non-empty queue blocks
+  downstream wrap-up phase (uses init_git_repo helper that disables commit signing).
+- Test 21: pipeline `_shared/*.md` prepended to per-phase prompts (alphabetical
+  order, before base prompt).
+
+`START_AT` (previously deferred from PR 1) ships here with its natural home in
+multi-phase pipelines.
+
+**Deferred to PR 4:** `shell` phase type for arbitrary scripts (e.g., pre-fetch
+external sources before the loop runs). Adds `curl`/`pandoc` to the preflight when
+the pipeline includes shell phases.
+
 ## Critical (fixed)
 
 ### 1. Decompose `prd.json` output was incompatible with forward Ralph
