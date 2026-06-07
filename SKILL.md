@@ -5,7 +5,7 @@ description: "Agent-agnostic, platform-agnostic autonomous loop creator. Generat
 
 # Forge — Agent-Agnostic, Platform-Agnostic Autonomous Loop Creator
 
-Forge generates portable external bash loops that drive any headless coding-agent CLI (claude, droid, codex, opencode, gemini, copilot, …) across many fresh-context iterations. Implements forward, decompose, and (coming soon) multi-phase pipeline workflows. Memory persists via git, `progress.txt`, and `prd.json`. Forge is not tied to any single AI agent or platform — the user chooses which agent powers each loop, and the skill installs in any platform that supports skills (Factory.AI Droid, Claude Code, …).
+Forge generates portable external bash loops that drive any headless coding-agent CLI (claude, droid, codex, opencode, gemini, copilot, …) across many fresh-context iterations. Implements forward, decompose, and multi-phase pipeline workflows. Memory persists via git, `progress.txt`, and `prd.json`. Forge is not tied to any single AI agent or platform — the user chooses which agent powers each loop, and the skill installs in any platform that supports skills (Factory.AI Droid, Claude Code, …).
 
 > **Previously known as Ralph.** The v1 invocation `/ralph` is renamed to `/forge`. Existing `.ralph/*.sh` generated scripts continue to work unchanged — only the slash command and the skill `name:` field change. Natural-language triggers like "use ralph to …" still route here for muscle-memory continuity.
 

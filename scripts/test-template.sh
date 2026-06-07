@@ -68,7 +68,8 @@ TMP26="$(mktemp -d)"
 TMP27="$(mktemp -d)"
 TMP28="$(mktemp -d)"
 TMP29="$(mktemp -d)"
-trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9" "$TMP10" "$TMP11" "$TMP12" "$TMP13" "$TMP14" "$TMP15" "$TMP16" "$TMP17" "$TMP18" "$TMP19" "$TMP20" "$TMP21" "$TMP22" "$TMP23" "$TMP24" "$TMP25" "$TMP26" "$TMP27" "$TMP28" "$TMP29"' EXIT
+TMP30="$(mktemp -d)"
+trap 'rm -rf "$TMP1" "$TMP2" "$TMP3" "$TMP4" "$TMP5" "$TMP6" "$TMP7" "$TMP8" "$TMP9" "$TMP10" "$TMP11" "$TMP12" "$TMP13" "$TMP14" "$TMP15" "$TMP16" "$TMP17" "$TMP18" "$TMP19" "$TMP20" "$TMP21" "$TMP22" "$TMP23" "$TMP24" "$TMP25" "$TMP26" "$TMP27" "$TMP28" "$TMP29" "$TMP30"' EXIT
 
 # Test 1: successful completion when agent emits COMPLETE marker.
 mkdir -p "$TMP1/.ralph"
@@ -259,6 +260,12 @@ if ! jq -e '
 ' "$TMP7/prd.json" >/dev/null 2>&1; then
   echo "FAIL: prd.json schema is not forward-Forge-compatible"
   echo "--- prd.json ---"
+  cat "$TMP7/prd.json"
+  exit 1
+fi
+branch_name=$(jq -r '.branchName' "$TMP7/prd.json")
+if [ "$branch_name" != "forge/test-feature" ]; then
+  echo "FAIL: decompose should emit forge/ branchName (got: $branch_name)"
   cat "$TMP7/prd.json"
   exit 1
 fi
@@ -1167,3 +1174,65 @@ echo "  Test 29 passed: loop progressed through 2-item queue (2 flips, 2 commits
 
 echo ""
 echo "All pipeline loop multi-iteration smoke tests passed."
+
+# ═══════════════════════════════════════════════════════
+# Branch prefix / archive naming tests
+# ═══════════════════════════════════════════════════════
+
+echo ""
+echo "Running branch prefix smoke tests..."
+
+# Test 30: archive folder strips forge/ prefix (not forge/old-feature in path)
+mkdir -p "$TMP30/.ralph"
+init_git_repo "$TMP30"
+render_script \
+  "$TMP30/.ralph/smoke.sh" \
+  "bash" \
+  "bash -lc 'echo \"<promise>COMPLETE</promise>\"'"
+
+git -C "$TMP30" checkout -q -b forge/old-feature
+cat > "$TMP30/prd.json" <<'JSON'
+{"branchName":"forge/old-feature","userStories":[]}
+JSON
+echo "# old progress" > "$TMP30/progress.txt"
+git -C "$TMP30" add -A
+git -C "$TMP30" -c commit.gpgsign=false commit -q --no-gpg-sign -m "old feature run"
+
+echo "forge/old-feature" > "$TMP30/.ralph-last-branch"
+
+cat > "$TMP30/prd.json" <<'JSON'
+{"branchName":"forge/new-feature","userStories":[]}
+JSON
+
+if ! (cd "$TMP30" && ./.ralph/smoke.sh 1 >"$TMP30/out.txt" 2>&1); then
+  echo "FAIL: archive smoke should exit 0"
+  cat "$TMP30/out.txt"
+  exit 1
+fi
+archive_dir=$(find "$TMP30/.ralph-archive" -maxdepth 1 -type d -name '*-old-feature' 2>/dev/null | head -1)
+if [ -z "$archive_dir" ]; then
+  echo "FAIL: expected archive dir ending in -old-feature under .ralph-archive/"
+  ls -la "$TMP30/.ralph-archive/" 2>/dev/null || echo "(no archive dir)"
+  cat "$TMP30/out.txt"
+  exit 1
+fi
+archive_base=$(basename "$archive_dir")
+case "$archive_base" in
+  *forge*)
+    echo "FAIL: archive folder name should not contain forge/ prefix (got: $archive_base)"
+    exit 1
+    ;;
+  *-old-feature) ;;
+  *)
+    echo "FAIL: unexpected archive folder name (got: $archive_base)"
+    exit 1
+    ;;
+esac
+if [ ! -f "$archive_dir/prd.json" ]; then
+  echo "FAIL: archived prd.json missing from $archive_dir"
+  exit 1
+fi
+echo "  Test 30 passed: forge/ branch prefix stripped in archive folder name"
+
+echo ""
+echo "All branch prefix smoke tests passed."

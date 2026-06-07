@@ -103,7 +103,8 @@ if [ -f "$PRD_FILE" ] && [ -f "$LAST_BRANCH_FILE" ]; then
 
   if [ -n "$CURRENT_BRANCH" ] && [ -n "$LAST_BRANCH" ] && [ "$CURRENT_BRANCH" != "$LAST_BRANCH" ]; then
     DATE=$(date +%Y-%m-%d)
-    FOLDER_NAME=${LAST_BRANCH#ralph/}
+    FOLDER_NAME="${LAST_BRANCH#ralph/}"
+    FOLDER_NAME="${FOLDER_NAME#forge/}"
     ARCHIVE_FOLDER="$ARCHIVE_DIR/$DATE-$FOLDER_NAME"
 
     echo "Archiving previous run: $LAST_BRANCH"

@@ -226,7 +226,7 @@ fi
 echo "Emitting prd.json..."
 jq '{
   project: .feature_name,
-  branchName: ("ralph/" + (.feature_name | gsub("[^a-zA-Z0-9]+"; "-") | ascii_downcase | gsub("^-+|-+$"; ""))),
+  branchName: ("forge/" + (.feature_name | gsub("[^a-zA-Z0-9]+"; "-") | ascii_downcase | gsub("^-+|-+$"; ""))),
   description: .capability_surface,
   userStories: [
     .nodes[] | select(.status == "atomic") | .stories[] | {
