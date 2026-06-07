@@ -6,7 +6,7 @@
 
 h/t [Geoffrey Huntley](https://ghuntley.com/ralph/) and [Ben Tossell](https://github.com/factory-ben/ralph) for the original Ralph pattern.
 
-> **v2.0.0 released 2026-05-24.** See [CHANGELOG.md](CHANGELOG.md) for the full set of changes. `/ralph` was renamed to `/forge`; existing `.ralph/*.sh` generated scripts continue to run unchanged. See [Migration from Ralph](#migration-from-ralph) below.
+> **v2.0.0 released 2026-05-24.** See [CHANGELOG.md](CHANGELOG.md) for the full set of changes. `/ralph` was renamed to `/forge`; existing `.ralph/*.sh` generated scripts continue to run unchanged. See [Migration from Ralph](#migration-from-ralph) below. For why both names still appear in the repo, see [NAMING.md](NAMING.md).
 
 ## What It Does
 
@@ -236,6 +236,7 @@ The `.ralph/` runtime directory name is preserved from v1 for backward compatibi
 ## Repo Layout
 
 - `SKILL.md`: main Forge instructions and workflow
+- [`NAMING.md`](NAMING.md): Forge vs Ralph naming layers (product, runtime, repo)
 - `scripts/ralph.sh`: reference loop template used when generating `.ralph/<loop-name>.sh`
 - `scripts/prompt.md`: prompt template copied to `.ralph/<loop-name>-prompt.md`
 - `scripts/decompose.sh`: decompose loop template used when generating `.ralph/decompose-<n>.sh`

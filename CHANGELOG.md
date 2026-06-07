@@ -7,6 +7,22 @@ implementation details, scoping decisions, and per-PR rationale, see
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- Decompose mode now emits `branchName: "forge/…"` in generated `prd.json`
+  (aligned with forward mode). Existing `ralph/…` values in old files continue
+  to work unchanged.
+- Forward loop archive folders now strip both `ralph/` and `forge/` branch
+  prefixes when writing to `.ralph-archive/` (fixes ugly folder names for new
+  `forge/` branches).
+
+### Added
+
+- [`NAMING.md`](NAMING.md) — documents the three naming layers (product, runtime,
+  repo source) after the v2 Ralph → Forge rename.
+
 ## [2.0.0] — 2026-05-24
 
 The v2 release: a rename to disambiguate from Anthropic's `/ralph-loop` plugin,
